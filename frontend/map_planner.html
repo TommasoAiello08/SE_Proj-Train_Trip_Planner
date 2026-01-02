@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🗺️ Mappa Interattiva - Train Planner</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 1rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 1rem;
+            height: calc(100vh - 2rem);
+        }
+
+        .sidebar {
+            background: white;
+            border-radius: 16px;
+            padding: 1.5rem;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .map-container {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        h1 {
+            color: #667eea;
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: #6b7280;
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.2rem;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 0.6rem;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .mode-toggle {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .mode-btn {
+            flex: 1;
+            padding: 0.6rem;
+            border: 2px solid #e5e7eb;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.3s;
+        }
+
+        .mode-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .selection-display {
+            background: #f3f4f6;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .city-badge {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 0.4rem 0.8rem;
+            border-radius: 20px;
+            margin: 0.25rem;
+            font-size: 0.85rem;
+        }
+
+        .city-badge.start {
+            background: #10b981;
+        }
+
+        .city-badge.end {
+            background: #ef4444;
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 0.8rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            width: 100%;
+            padding: 0.6rem;
+            background: white;
+            color: #667eea;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            margin-top: 0.5rem;
+        }
+
+        .interest-tags {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+        }
+
+        .interest-tag {
+            display: flex;
+            align-items: center;
+            padding: 0.5rem;
+            border: 2px solid #e5e7eb;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+
+        .interest-tag input {
+            width: auto;
+            margin-right: 0.4rem;
+        }
+
+        .instructions {
+            background: #fef3c7;
+            padding: 0.8rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            color: #92400e;
+            margin-bottom: 1rem;
+        }
+
+        @media (max-width: 1024px) {
+            .container {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto 1fr;
+            }
+            
+            .sidebar {
+                height: auto;
+                max-height: 40vh;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h1>🗺️ Pianificatore Treni</h1>
+            <p class="subtitle">Seleziona le città sulla mappa</p>
+
+            <div class="mode-toggle">
+                <button class="mode-btn active" data-mode="smart_open">
+                    🧠 Solo Partenza
+                </button>
+                <button class="mode-btn" data-mode="smart_fixed">
+                    🎯 Partenza + Arrivo
+                </button>
+            </div>
+
+            <div class="instructions" id="instructions">
+                📍 Clicca su una città sulla mappa per selezionare la partenza
+            </div>
+
+            <div class="selection-display">
+                <div id="selectionInfo">
+                    <small style="color: #6b7280;">Nessuna selezione</small>
+                </div>
+            </div>
+
+            <form id="planForm">
+                <div class="form-group">
+                    <label>Data Partenza *</label>
+                    <input type="date" id="startDate" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Durata (giorni) *</label>
+                    <select id="duration" required>
+                        <option value="1">1 giorno</option>
+                        <option value="2" selected>2 giorni</option>
+                        <option value="3">3 giorni</option>
+                        <option value="4">4 giorni</option>
+                        <option value="5">5 giorni</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>I tuoi interessi (opzionale)</label>
+                    <div class="interest-tags">
+                        <label class="interest-tag">
+                            <input type="checkbox" name="interests" value="arte">
+                            <span>🎨 Arte</span>
+                        </label>
+                        <label class="interest-tag">
+                            <input type="checkbox" name="interests" value="storia">
+                            <span>🏛️ Storia</span>
+                        </label>
+                        <label class="interest-tag">
+                            <input type="checkbox" name="interests" value="natura">
+                            <span>🌲 Natura</span>
+                        </label>
+                        <label class="interest-tag">
+                            <input type="checkbox" name="interests" value="cibo">
+                            <span>🍝 Cibo</span>
+                        </label>
+                        <label class="interest-tag">
+                            <input type="checkbox" name="interests" value="mare">
+                            <span>🌊 Mare</span>
+                        </label>
+                        <label class="interest-tag">
+                            <input type="checkbox" name="interests" value="montagna">
+                            <span>⛰️ Montagna</span>
+                        </label>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-primary" id="submitBtn" disabled>
+                    🔍 Pianifica Viaggio
+                </button>
+                <button type="button" class="btn-secondary" id="resetBtn">
+                    🔄 Reset Selezione
+                </button>
+            </form>
+        </div>
+
+        <div class="map-container">
+            <div id="map"></div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const BACKEND_URL = 'http://localhost:5001';
+        
+        let map;
+        let markers = {};
+        let currentMode = 'smart_open';  // or 'smart_fixed'
+        let selectedStart = null;
+        let selectedEnd = null;
+
+        // Initialize map
+        function initMap() {
+            map = L.map('map').setView([42.5, 12.5], 6);  // Center on Italy
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+
+            loadProvinces();
+        }
+
+        // Load provinces and add markers
+        async function loadProvinces() {
+            try {
+                const provinces = [
+                    {name: 'Milano', region: 'Lombardia', lat: 45.4642, lon: 9.1900},
+                    {name: 'Roma', region: 'Lazio', lat: 41.9028, lon: 12.4964},
+                    {name: 'Firenze', region: 'Toscana', lat: 43.7696, lon: 11.2558},
+                    {name: 'Venezia', region: 'Veneto', lat: 45.4408, lon: 12.3155},
+                    {name: 'Napoli', region: 'Campania', lat: 40.8518, lon: 14.2681},
+                    {name: 'Torino', region: 'Piemonte', lat: 45.0703, lon: 7.6869},
+                    {name: 'Bologna', region: 'Emilia-Romagna', lat: 44.4949, lon: 11.3426},
+                    {name: 'Verona', region: 'Veneto', lat: 45.4384, lon: 10.9916},
+                    {name: 'Genova', region: 'Liguria', lat: 44.4056, lon: 8.9463},
+                    {name: 'Pisa', region: 'Toscana', lat: 43.7228, lon: 10.4017},
+                    {name: 'Bergamo', region: 'Lombardia', lat: 45.6983, lon: 9.6773},
+                    {name: 'Brescia', region: 'Lombardia', lat: 45.5416, lon: 10.2118},
+                    {name: 'Padova', region: 'Veneto', lat: 45.4064, lon: 11.8768},
+                    {name: 'Siena', region: 'Toscana', lat: 43.3188, lon: 11.3308},
+                    {name: 'Perugia', region: 'Umbria', lat: 43.1107, lon: 12.3908},
+                    {name: 'Ancona', region: 'Marche', lat: 43.6158, lon: 13.5189},
+                    {name: 'Bari', region: 'Puglia', lat: 41.1171, lon: 16.8719},
+                    {name: 'Palermo', region: 'Sicilia', lat: 38.1157, lon: 13.3615},
+                    {name: 'Catania', region: 'Sicilia', lat: 37.5079, lon: 15.0830},
+                    {name: 'Cagliari', region: 'Sardegna', lat: 39.2238, lon: 9.1217}
+                ];
+
+                provinces.forEach(prov => {
+                    const marker = L.circleMarker([prov.lat, prov.lon], {
+                        radius: 8,
+                        fillColor: '#667eea',
+                        color: '#fff',
+                        weight: 2,
+                        opacity: 1,
+                        fillOpacity: 0.8
+                    }).addTo(map);
+
+                    marker.bindPopup(`<b>${prov.name}</b><br>${prov.region}`);
+                    marker.on('click', () => handleCityClick(prov));
+                    
+                    markers[prov.name] = marker;
+                });
+
+                console.log(`✅ Loaded ${provinces.length} provinces on map`);
+            } catch (error) {
+                console.error('Error loading provinces:', error);
+            }
+        }
+
+        // Handle city click on map
+        function handleCityClick(city) {
+            if (currentMode === 'smart_open') {
+                // Only select start city
+                selectedStart = city.name;
+                selectedEnd = null;
+                updateMarkers();
+                updateSelectionDisplay();
+            } else if (currentMode === 'smart_fixed') {
+                // Select start, then end
+                if (!selectedStart) {
+                    selectedStart = city.name;
+                } else if (selectedStart === city.name) {
+                    // Clicked same city, deselect
+                    selectedStart = null;
+                } else if (!selectedEnd) {
+                    selectedEnd = city.name;
+                } else {
+                    // Reset and start over
+                    selectedStart = city.name;
+                    selectedEnd = null;
+                }
+                updateMarkers();
+                updateSelectionDisplay();
+            }
+        }
+
+        // Update marker colors
+        function updateMarkers() {
+            Object.entries(markers).forEach(([name, marker]) => {
+                let color = '#667eea';
+                if (name === selectedStart) {
+                    color = '#10b981';  // Green for start
+                } else if (name === selectedEnd) {
+                    color = '#ef4444';  // Red for end
+                }
+                marker.setStyle({fillColor: color});
+            });
+        }
+
+        // Update selection display
+        function updateSelectionDisplay() {
+            const display = document.getElementById('selectionInfo');
+            const submitBtn = document.getElementById('submitBtn');
+            const instructions = document.getElementById('instructions');
+
+            if (!selectedStart) {
+                display.innerHTML = '<small style="color: #6b7280;">Nessuna selezione</small>';
+                submitBtn.disabled = true;
+                instructions.innerHTML = '📍 Clicca su una città sulla mappa per selezionare la partenza';
+                return;
+            }
+
+            let html = `<div class="city-badge start">🟢 ${selectedStart}</div>`;
+            
+            if (currentMode === 'smart_fixed') {
+                if (selectedEnd) {
+                    html += `<div class="city-badge end">🔴 ${selectedEnd}</div>`;
+                    submitBtn.disabled = false;
+                    instructions.innerHTML = '✅ Partenza e arrivo selezionate. Clicca "Pianifica Viaggio"';
+                } else {
+                    submitBtn.disabled = true;
+                    instructions.innerHTML = '📍 Ora clicca su una città di arrivo';
+                }
+            } else {
+                submitBtn.disabled = false;
+                instructions.innerHTML = '✅ Partenza selezionata. Il sistema suggerirà le destinazioni!';
+            }
+
+            display.innerHTML = html;
+        }
+
+        // Handle mode toggle
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentMode = btn.dataset.mode;
+                // Reset selection
+                selectedStart = null;
+                selectedEnd = null;
+                updateMarkers();
+                updateSelectionDisplay();
+            });
+        });
+
+        // Handle reset
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            selectedStart = null;
+            selectedEnd = null;
+            updateMarkers();
+            updateSelectionDisplay();
+        });
+
+        // Handle form submission
+        document.getElementById('planForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const startDate = document.getElementById('startDate').value;
+            const duration = parseInt(document.getElementById('duration').value);
+            const interests = Array.from(document.querySelectorAll('input[name="interests"]:checked'))
+                .map(cb => cb.value);
+
+            const payload = {
+                mode: currentMode,
+                start_city: selectedStart,
+                end_city: selectedEnd,
+                start_date: startDate,
+                duration: duration,
+                interests: interests
+            };
+
+            console.log('Sending request:', payload);
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/plan`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('Success:', data);
+                alert(`✅ Itinerario creato!\n\nCittà: ${data.route.join(' → ')}\n\nVedi console per dettagli.`);
+            } catch (error) {
+                console.error('Error:', error);
+                alert(`❌ Errore: ${error.message}\n\nAssicurati che il backend sia attivo su ${BACKEND_URL}`);
+            }
+        });
+
+        // Set default date
+        function setDefaultDate() {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            document.getElementById('startDate').valueAsDate = tomorrow;
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            initMap();
+            setDefaultDate();
+        });
+    </script>
+</body>
+</html>
