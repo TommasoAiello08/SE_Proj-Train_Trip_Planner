@@ -320,29 +320,16 @@
         // Load provinces and add markers
         async function loadProvinces() {
             try {
-                const provinces = [
-                    {name: 'Milano', region: 'Lombardia', lat: 45.4642, lon: 9.1900},
-                    {name: 'Roma', region: 'Lazio', lat: 41.9028, lon: 12.4964},
-                    {name: 'Firenze', region: 'Toscana', lat: 43.7696, lon: 11.2558},
-                    {name: 'Venezia', region: 'Veneto', lat: 45.4408, lon: 12.3155},
-                    {name: 'Napoli', region: 'Campania', lat: 40.8518, lon: 14.2681},
-                    {name: 'Torino', region: 'Piemonte', lat: 45.0703, lon: 7.6869},
-                    {name: 'Bologna', region: 'Emilia-Romagna', lat: 44.4949, lon: 11.3426},
-                    {name: 'Verona', region: 'Veneto', lat: 45.4384, lon: 10.9916},
-                    {name: 'Genova', region: 'Liguria', lat: 44.4056, lon: 8.9463},
-                    {name: 'Pisa', region: 'Toscana', lat: 43.7228, lon: 10.4017},
-                    {name: 'Bergamo', region: 'Lombardia', lat: 45.6983, lon: 9.6773},
-                    {name: 'Brescia', region: 'Lombardia', lat: 45.5416, lon: 10.2118},
-                    {name: 'Padova', region: 'Veneto', lat: 45.4064, lon: 11.8768},
-                    {name: 'Siena', region: 'Toscana', lat: 43.3188, lon: 11.3308},
-                    {name: 'Perugia', region: 'Umbria', lat: 43.1107, lon: 12.3908},
-                    {name: 'Ancona', region: 'Marche', lat: 43.6158, lon: 13.5189},
-                    {name: 'Bari', region: 'Puglia', lat: 41.1171, lon: 16.8719},
-                    {name: 'Palermo', region: 'Sicilia', lat: 38.1157, lon: 13.3615},
-                    {name: 'Catania', region: 'Sicilia', lat: 37.5079, lon: 15.0830},
-                    {name: 'Cagliari', region: 'Sardegna', lat: 39.2238, lon: 9.1217}
-                ];
-
+                // Fetch cities from backend
+                const response = await fetch(`${BACKEND_URL}/api/cities`);
+                if (!response.ok) {
+                    throw new Error('Failed to load cities from backend');
+                }
+                
+                const provinces = await response.json();
+                
+                console.log(`Loaded ${provinces.length} cities from backend`);
+                
                 provinces.forEach(prov => {
                     const marker = L.circleMarker([prov.lat, prov.lon], {
                         radius: 8,
@@ -362,6 +349,7 @@
                 console.log(`✅ Loaded ${provinces.length} provinces on map`);
             } catch (error) {
                 console.error('Error loading provinces:', error);
+                alert(`⚠️ Impossibile caricare le città dal backend.\nAssicurati che il server sia attivo su ${BACKEND_URL}\n\nErrore: ${error.message}`);
             }
         }
 

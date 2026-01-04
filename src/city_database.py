@@ -21,6 +21,10 @@ class CityDatabase:
             # Default: look for data/ relative to file location
             db_path = Path(__file__).parent.parent / "data" / "cities_database.json"
         self.db_path = Path(db_path)
+        
+        # Also load provinces static database
+        self.provinces_path = Path(__file__).parent.parent / "data" / "provinces_static.json"
+        
         self.cities = {}
         self.categories = {}
         self.use_osm = use_osm
@@ -35,6 +39,15 @@ class CityDatabase:
         # Index by ID
         for city in data['cities']:
             self.cities[city['id']] = city
+        
+        # Also load provinces static database if exists
+        if self.provinces_path.exists():
+            with open(self.provinces_path, 'r', encoding='utf-8') as f:
+                provinces_data = json.load(f)
+                for city in provinces_data['cities']:
+                    # Don't overwrite existing cities
+                    if city['id'] not in self.cities:
+                        self.cities[city['id']] = city
         
         self.categories = data.get('categories_info', {})
         self.metadata = data.get('metadata', {})
@@ -225,14 +238,22 @@ class CityDatabase:
         # 2. Attrazioni (30%)
         attractions = city.get('attractions', [])
         if attractions:
-            avg_rating = sum(a['rating'] for a in attractions) / len(attractions)
+            avg_rating = sum(a.get('rating', 8.0) for a in attractions) / len(attractions)
             attraction_score = avg_rating / 10.0  # Normalizza a 0-1
             score += attraction_score * 0.3
         
         # 3. Popolarità (20%)
-        population = city.get('population', 0)
-        popularity_score = min(population / 3000000, 1.0)  # Normalizza
-        score += popularity_score * 0.2
+        population = city.get('population') or 0
+        if population > 0:
+            popularity_score = min(population / 3000000, 1.0)  # Normalizza
+            score += popularity_score * 0.2
+        else:
+            # Se non abbiamo population, usiamo numero di attrazioni come proxy
+            if attractions:
+                popularity_score = min(len(attractions) / 30, 1.0)
+                score += popularity_score * 0.2
+            else:
+                score += 0.1  # Score minimo
         
         # 4. Penalità distanza (10%)
         # Meno tempo viaggio = migliore

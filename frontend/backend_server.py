@@ -54,18 +54,14 @@ def suggest_cities(start_city, num_days, interests, budget):
         # Fallback to popular cities
         return ['Milano', 'Firenze', 'Roma'][:min(num_days, 3)]
     
-    # List of all major Italian cities (will use OSM for others if needed)
-    all_cities = [
-        'Milano', 'Roma', 'Firenze', 'Venezia', 'Napoli', 
-        'Torino', 'Bologna', 'Verona', 'Genova', 'Pisa',
-        'Padova', 'Parma', 'Modena', 'Trieste', 'Perugia',
-        'Siena', 'Bergamo', 'Brescia', 'Vicenza', 'Trento'
-    ]
+    # Use only cities from static DB to avoid OSM delays
+    # Get all available cities directly from database
+    all_city_names = [city['name'] for city in db.cities.values()]
     
     # Get all cities and calculate scores
     city_scores = []
     
-    for city_name in all_cities:
+    for city_name in all_city_names:
         if city_name == start_city:
             continue
             
@@ -347,19 +343,21 @@ def format_itinerary_for_frontend(itinerary, budget):
 
 @app.route('/api/cities', methods=['GET'])
 def get_cities():
-    """Get list of available cities"""
-    cities = [
-        {'name': 'Milano', 'region': 'Lombardia'},
-        {'name': 'Roma', 'region': 'Lazio'},
-        {'name': 'Firenze', 'region': 'Toscana'},
-        {'name': 'Venezia', 'region': 'Veneto'},
-        {'name': 'Napoli', 'region': 'Campania'},
-        {'name': 'Torino', 'region': 'Piemonte'},
-        {'name': 'Bologna', 'region': 'Emilia-Romagna'},
-        {'name': 'Verona', 'region': 'Veneto'},
-        {'name': 'Genova', 'region': 'Liguria'},
-        {'name': 'Pisa', 'region': 'Toscana'}
-    ]
+    """Get list of available cities from database"""
+    from city_database import CityDatabase
+    
+    db = CityDatabase()
+    cities = []
+    
+    for city_id, city_data in db.cities.items():
+        cities.append({
+            'name': city_data['name'],
+            'region': city_data.get('region', 'Unknown'),
+            'lat': city_data['coordinates']['lat'],
+            'lon': city_data['coordinates']['lon'],
+            'has_station': city_data.get('station_code') is not None or city_data.get('has_train_station', False)
+        })
+    
     return jsonify(cities)
 
 
