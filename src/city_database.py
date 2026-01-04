@@ -21,6 +21,10 @@ class CityDatabase:
             # Default: look for data/ relative to file location
             db_path = Path(__file__).parent.parent / "data" / "cities_database.json"
         self.db_path = Path(db_path)
+        
+        # Also load provinces static database
+        self.provinces_path = Path(__file__).parent.parent / "data" / "provinces_static.json"
+        
         self.cities = {}
         self.categories = {}
         self.use_osm = use_osm
@@ -35,6 +39,15 @@ class CityDatabase:
         # Index by ID
         for city in data['cities']:
             self.cities[city['id']] = city
+        
+        # Also load provinces static database if exists
+        if self.provinces_path.exists():
+            with open(self.provinces_path, 'r', encoding='utf-8') as f:
+                provinces_data = json.load(f)
+                for city in provinces_data['cities']:
+                    # Don't overwrite existing cities
+                    if city['id'] not in self.cities:
+                        self.cities[city['id']] = city
         
         self.categories = data.get('categories_info', {})
         self.metadata = data.get('metadata', {})
@@ -59,6 +72,30 @@ class CityDatabase:
         
         return None
     
+    def is_italy(self, coords: dict) -> bool:
+        # Nominatim style: display_name usually contains ", Italy"
+        dn = (coords or {}).get("display_name", "") or ""
+        print(dn)
+        # be permissive: Italy / Italia
+        return ("Italy" in dn) or ("Italia" in dn)
+
+    def validate_osm_result(self, city_name: str, coords: dict, station: dict) -> None:
+        # Must have coordinates
+        if not coords or "lat" not in coords or "lon" not in coords:
+            raise ValueError(f"Unsupported city '{city_name}': no coordinates found")
+
+        # Must be in Italy
+        if not self.is_italy(coords):
+            raise ValueError(f"Unsupported city '{city_name}': only Italian cities are supported")
+
+        # Must have a train station
+        # (your get_train_station returns something truthy when found)
+        if station:
+            print(f"   🚉 Found train station: {station.get('name', 'unknown')}")
+        else:
+            raise ValueError(f"Unsupported city '{city_name}': no train station found")
+
+    
     def _fetch_city_from_osm(self, city_name: str) -> Optional[Dict]:
         """Create city entry from OSM data on-demand"""
         try:
@@ -66,34 +103,54 @@ class CityDatabase:
             coords = self.osm_provider.get_city_coordinates(city_name)
             if not coords:
                 return None
-            
-            # POIs
-            pois = self.osm_provider.get_city_pois(city_name)
-            
-            # Train station
+
+            # Train station (require it)
             station = self.osm_provider.get_train_station(city_name)
-            
+
+            # Validate against your constraints (Italy + station + coords)
+            self.validate_osm_result(city_name, coords, station)
+
+            # POIs (optional, can be empty)
+            pois = self.osm_provider.get_city_pois(city_name) or []
+
             # Build database-compatible entry
             city_entry = {
                 'id': f"osm_{city_name.lower().replace(' ', '_')}",
                 'name': city_name,
-                'region': coords.get('display_name', '').split(',')[-2].strip() if ',' in coords.get('display_name', '') else 'Unknown',
-                'latitude': coords['lat'],
-                'longitude': coords['lon'],
-                'station_code': station.get('name', city_name) if station else city_name,
+                'region': coords.get('display_name', '').split(',')[-2].strip()
+                        if ',' in coords.get('display_name', '') else 'Unknown',
+
+                # ✅ IMPORTANT: provide the schema expected by travel_graph
+                'coordinates': {
+                    'lat': float(coords['lat']),
+                    'lon': float(coords['lon']),
+                },
+
+                # (optional) keep these if other code uses them
+                'latitude': float(coords['lat']),
+                'longitude': float(coords['lon']),
+
+                'station_code': station.get('name', city_name),
                 'attractions': pois,
-                'categories': list(set(cat for poi in pois for cat in poi.get('categories', []))),
-                'average_cost_per_day': 60,  # Default estimate
+                'categories': list({cat for poi in pois for cat in poi.get('categories', [])}),
+                'average_cost_per_day': 60,
                 'food_specialties': [],
-                'osm_source': True  # Flag indicating OSM source
+                'osm_source': True
             }
-            
-            print(f"  ✅ Created city from OSM: {len(pois)} POIs found")
+
+            print(f"✅ Created city from OSM: {len(pois)} POIs found")
             return city_entry
-            
-        except Exception as e:
-            print(f"  ❌ Error fetching OSM data for {city_name}: {e}")
+
+        except ValueError as e:
+            # Validation failure => treat as "unsupported city"
+            print(f"❌ {e}")
             return None
+
+        except Exception as e:
+            print(f"❌ Error fetching OSM data for {city_name}: {e}")
+            return None
+
+        
     
     def get_all_cities(self) -> List[Dict]:
         """Get all cities"""
@@ -181,14 +238,22 @@ class CityDatabase:
         # 2. Attrazioni (30%)
         attractions = city.get('attractions', [])
         if attractions:
-            avg_rating = sum(a['rating'] for a in attractions) / len(attractions)
+            avg_rating = sum(a.get('rating', 8.0) for a in attractions) / len(attractions)
             attraction_score = avg_rating / 10.0  # Normalizza a 0-1
             score += attraction_score * 0.3
         
         # 3. Popolarità (20%)
-        population = city.get('population', 0)
-        popularity_score = min(population / 3000000, 1.0)  # Normalizza
-        score += popularity_score * 0.2
+        population = city.get('population') or 0
+        if population > 0:
+            popularity_score = min(population / 3000000, 1.0)  # Normalizza
+            score += popularity_score * 0.2
+        else:
+            # Se non abbiamo population, usiamo numero di attrazioni come proxy
+            if attractions:
+                popularity_score = min(len(attractions) / 30, 1.0)
+                score += popularity_score * 0.2
+            else:
+                score += 0.1  # Score minimo
         
         # 4. Penalità distanza (10%)
         # Meno tempo viaggio = migliore

@@ -81,6 +81,15 @@ class TravelGraph:
         # Calcola distanza in linea d'aria
         from math import radians, cos, sin, asin, sqrt
         
+        coords = origin_city.get("coordinates")
+        if not coords or "lat" not in coords or "lon" not in coords:
+            raise ValueError(f"Missing coordinates for city '{origin}'")
+
+        coords2 = dest_city.get("coordinates")
+        if not coords2 or "lat" not in coords2 or "lon" not in coords2:
+            raise ValueError(f"Missing coordinates for city '{destination}'")
+
+        
         lat1, lon1 = origin_city['coordinates']['lat'], origin_city['coordinates']['lon']
         lat2, lon2 = dest_city['coordinates']['lat'], dest_city['coordinates']['lon']
         

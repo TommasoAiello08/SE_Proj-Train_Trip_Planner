@@ -20,8 +20,8 @@ Sistema intelligente di pianificazione viaggi in treno per l'Italia, con integra
 ### 1. Clone e Setup
 
 ```bash
-git clone <repository-url>
-cd SEProejct
+git clone https://github.com/TommasoAiello08/SE_Proj-Train_Trip_Planner.git
+cd se_proj
 python3 -m venv .venv
 source .venv/bin/activate  # macOS/Linux
 # oppure: .venv\Scripts\activate  # Windows

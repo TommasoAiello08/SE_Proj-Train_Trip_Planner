@@ -1,0 +1,692 @@
+{
+  "cities": [
+    {
+      "id": "milano",
+      "name": "Milano",
+      "region": "Lombardia",
+      "station_code": "S01700",
+      "station_name": "MILANO CENTRALE",
+      "coordinates": {
+        "lat": 45.4642,
+        "lon": 9.19
+      },
+      "population": 1400000,
+      "categories": [
+        "arte",
+        "moda",
+        "business",
+        "cultura",
+        "shopping"
+      ],
+      "tags": [
+        "moderna",
+        "efficiente",
+        "internazionale"
+      ],
+      "description": "Capitale economica d'Italia, centro della moda e del design",
+      "min_stay_days": 1.5,
+      "attractions": [
+        {
+          "name": "Duomo di Milano",
+          "type": "chiesa",
+          "rating": 9.5,
+          "duration_hours": 2,
+          "cost_euro": 15,
+          "popularity": 10
+        },
+        {
+          "name": "Ultima Cena (Leonardo)",
+          "type": "arte",
+          "rating": 9.8,
+          "duration_hours": 1,
+          "cost_euro": 15,
+          "popularity": 10
+        },
+        {
+          "name": "Castello Sforzesco",
+          "type": "castello",
+          "rating": 8.5,
+          "duration_hours": 2,
+          "cost_euro": 10,
+          "popularity": 8
+        },
+        {
+          "name": "Galleria Vittorio Emanuele II",
+          "type": "shopping",
+          "rating": 9.0,
+          "duration_hours": 1,
+          "cost_euro": 0,
+          "popularity": 9
+        }
+      ],
+      "food_specialties": [
+        "Risotto alla milanese",
+        "Cotoletta",
+        "Panettone"
+      ],
+      "avg_hotel_price": 90
+    },
+    {
+      "id": "roma",
+      "name": "Roma",
+      "region": "Lazio",
+      "station_code": "S08409",
+      "station_name": "ROMA TERMINI",
+      "coordinates": {
+        "lat": 41.9028,
+        "lon": 12.4964
+      },
+      "population": 2800000,
+      "categories": [
+        "storia",
+        "arte",
+        "cultura",
+        "religione"
+      ],
+      "tags": [
+        "antica",
+        "imperiale",
+        "eterna"
+      ],
+      "description": "Capitale d'Italia, città eterna con 2800 anni di storia",
+      "min_stay_days": 2.5,
+      "attractions": [
+        {
+          "name": "Colosseo",
+          "type": "storico",
+          "rating": 10.0,
+          "duration_hours": 3,
+          "cost_euro": 18,
+          "popularity": 10
+        },
+        {
+          "name": "Musei Vaticani + Cappella Sistina",
+          "type": "arte",
+          "rating": 9.9,
+          "duration_hours": 4,
+          "cost_euro": 20,
+          "popularity": 10
+        },
+        {
+          "name": "Fontana di Trevi",
+          "type": "monumento",
+          "rating": 9.2,
+          "duration_hours": 0.5,
+          "cost_euro": 0,
+          "popularity": 10
+        },
+        {
+          "name": "Fori Imperiali",
+          "type": "storico",
+          "rating": 9.3,
+          "duration_hours": 2,
+          "cost_euro": 16,
+          "popularity": 9
+        },
+        {
+          "name": "Pantheon",
+          "type": "monumento",
+          "rating": 9.5,
+          "duration_hours": 1,
+          "cost_euro": 5,
+          "popularity": 9
+        }
+      ],
+      "food_specialties": [
+        "Carbonara",
+        "Cacio e pepe",
+        "Supplì"
+      ],
+      "avg_hotel_price": 100
+    },
+    {
+      "id": "firenze",
+      "name": "Firenze",
+      "region": "Toscana",
+      "station_code": "S06409",
+      "station_name": "FIRENZE SANTA MARIA NOVELLA",
+      "coordinates": {
+        "lat": 43.7696,
+        "lon": 11.2558
+      },
+      "population": 380000,
+      "categories": [
+        "arte",
+        "rinascimento",
+        "cultura",
+        "gastronomia"
+      ],
+      "tags": [
+        "rinascimentale",
+        "artistica",
+        "elegante"
+      ],
+      "description": "Culla del Rinascimento, città d'arte per eccellenza",
+      "min_stay_days": 1.5,
+      "attractions": [
+        {
+          "name": "Galleria degli Uffizi",
+          "type": "museo",
+          "rating": 9.8,
+          "duration_hours": 3,
+          "cost_euro": 20,
+          "popularity": 10
+        },
+        {
+          "name": "Duomo + Cupola del Brunelleschi",
+          "type": "chiesa",
+          "rating": 9.5,
+          "duration_hours": 2,
+          "cost_euro": 18,
+          "popularity": 10
+        },
+        {
+          "name": "Ponte Vecchio",
+          "type": "monumento",
+          "rating": 8.9,
+          "duration_hours": 1,
+          "cost_euro": 0,
+          "popularity": 9
+        },
+        {
+          "name": "Galleria dell'Accademia (David)",
+          "type": "museo",
+          "rating": 9.3,
+          "duration_hours": 1.5,
+          "cost_euro": 16,
+          "popularity": 9
+        }
+      ],
+      "food_specialties": [
+        "Bistecca fiorentina",
+        "Ribollita",
+        "Lampredotto"
+      ],
+      "avg_hotel_price": 85
+    },
+    {
+      "id": "venezia",
+      "name": "Venezia",
+      "region": "Veneto",
+      "station_code": "S02589",
+      "station_name": "VENEZIA SANTA LUCIA",
+      "coordinates": {
+        "lat": 45.4408,
+        "lon": 12.3155
+      },
+      "population": 260000,
+      "categories": [
+        "romantico",
+        "arte",
+        "cultura",
+        "canali"
+      ],
+      "tags": [
+        "unica",
+        "romantica",
+        "lagunare"
+      ],
+      "description": "Città sull'acqua, unica al mondo per la sua struttura",
+      "min_stay_days": 1.5,
+      "attractions": [
+        {
+          "name": "Piazza San Marco",
+          "type": "piazza",
+          "rating": 9.7,
+          "duration_hours": 2,
+          "cost_euro": 0,
+          "popularity": 10
+        },
+        {
+          "name": "Basilica di San Marco",
+          "type": "chiesa",
+          "rating": 9.5,
+          "duration_hours": 1.5,
+          "cost_euro": 5,
+          "popularity": 10
+        },
+        {
+          "name": "Canal Grande (vaporetto)",
+          "type": "canale",
+          "rating": 9.5,
+          "duration_hours": 1,
+          "cost_euro": 9,
+          "popularity": 10
+        },
+        {
+          "name": "Palazzo Ducale",
+          "type": "palazzo",
+          "rating": 9.3,
+          "duration_hours": 2,
+          "cost_euro": 25,
+          "popularity": 9
+        },
+        {
+          "name": "Ponte di Rialto",
+          "type": "ponte",
+          "rating": 8.8,
+          "duration_hours": 0.5,
+          "cost_euro": 0,
+          "popularity": 9
+        }
+      ],
+      "food_specialties": [
+        "Sarde in saor",
+        "Risotto al nero di seppia",
+        "Cicchetti"
+      ],
+      "avg_hotel_price": 120
+    },
+    {
+      "id": "napoli",
+      "name": "Napoli",
+      "region": "Campania",
+      "station_code": "S09218",
+      "station_name": "NAPOLI CENTRALE",
+      "coordinates": {
+        "lat": 40.8518,
+        "lon": 14.2681
+      },
+      "population": 960000,
+      "categories": [
+        "mare",
+        "storia",
+        "gastronomia",
+        "vulcano"
+      ],
+      "tags": [
+        "vivace",
+        "autentica",
+        "mediterranea"
+      ],
+      "description": "Città del Vesuvio e della pizza, patrimonio dell'umanità",
+      "min_stay_days": 2.0,
+      "attractions": [
+        {
+          "name": "Vesuvio",
+          "type": "natura",
+          "rating": 9.0,
+          "duration_hours": 4,
+          "cost_euro": 10,
+          "popularity": 8
+        },
+        {
+          "name": "Pompei (scavi)",
+          "type": "storico",
+          "rating": 9.8,
+          "duration_hours": 3,
+          "cost_euro": 16,
+          "popularity": 10
+        },
+        {
+          "name": "Centro Storico",
+          "type": "quartiere",
+          "rating": 8.8,
+          "duration_hours": 3,
+          "cost_euro": 0,
+          "popularity": 8
+        },
+        {
+          "name": "Museo Archeologico",
+          "type": "museo",
+          "rating": 9.2,
+          "duration_hours": 2,
+          "cost_euro": 15,
+          "popularity": 7
+        }
+      ],
+      "food_specialties": [
+        "Pizza napoletana",
+        "Sfogliatella",
+        "Babà"
+      ],
+      "avg_hotel_price": 70
+    },
+    {
+      "id": "torino",
+      "name": "Torino",
+      "region": "Piemonte",
+      "station_code": "S00219",
+      "station_name": "TORINO PORTA NUOVA",
+      "coordinates": {
+        "lat": 45.0703,
+        "lon": 7.6869
+      },
+      "population": 870000,
+      "categories": [
+        "storia",
+        "cultura",
+        "cinema",
+        "cioccolato"
+      ],
+      "tags": [
+        "elegante",
+        "sabauda",
+        "alpina"
+      ],
+      "description": "Prima capitale d'Italia, città del cinema e della cioccolata",
+      "min_stay_days": 1.5,
+      "attractions": [
+        {
+          "name": "Museo Egizio",
+          "type": "museo",
+          "rating": 9.4,
+          "duration_hours": 3,
+          "cost_euro": 15,
+          "popularity": 9
+        },
+        {
+          "name": "Mole Antonelliana",
+          "type": "monumento",
+          "rating": 9.0,
+          "duration_hours": 2,
+          "cost_euro": 10,
+          "popularity": 8
+        },
+        {
+          "name": "Palazzo Reale",
+          "type": "palazzo",
+          "rating": 8.7,
+          "duration_hours": 2,
+          "cost_euro": 12,
+          "popularity": 7
+        },
+        {
+          "name": "Museo del Cinema",
+          "type": "museo",
+          "rating": 8.9,
+          "duration_hours": 2,
+          "cost_euro": 11,
+          "popularity": 8
+        }
+      ],
+      "food_specialties": [
+        "Bicerin",
+        "Gianduiotti",
+        "Agnolotti"
+      ],
+      "avg_hotel_price": 75
+    },
+    {
+      "id": "bologna",
+      "name": "Bologna",
+      "region": "Emilia-Romagna",
+      "station_code": "S05042",
+      "station_name": "BOLOGNA CENTRALE",
+      "coordinates": {
+        "lat": 44.4949,
+        "lon": 11.3426
+      },
+      "population": 390000,
+      "categories": [
+        "gastronomia",
+        "cultura",
+        "università",
+        "medievale"
+      ],
+      "tags": [
+        "dotta",
+        "grassa",
+        "rossa"
+      ],
+      "description": "Città dei portici e della buona cucina, sede università più antica",
+      "min_stay_days": 1.0,
+      "attractions": [
+        {
+          "name": "Piazza Maggiore",
+          "type": "piazza",
+          "rating": 8.8,
+          "duration_hours": 1,
+          "cost_euro": 0,
+          "popularity": 8
+        },
+        {
+          "name": "Due Torri (Asinelli e Garisenda)",
+          "type": "torre",
+          "rating": 8.5,
+          "duration_hours": 1.5,
+          "cost_euro": 5,
+          "popularity": 8
+        },
+        {
+          "name": "Basilica di San Petronio",
+          "type": "chiesa",
+          "rating": 8.3,
+          "duration_hours": 1,
+          "cost_euro": 0,
+          "popularity": 7
+        },
+        {
+          "name": "Mercato di Mezzo",
+          "type": "mercato",
+          "rating": 8.7,
+          "duration_hours": 1.5,
+          "cost_euro": 0,
+          "popularity": 7
+        }
+      ],
+      "food_specialties": [
+        "Tagliatelle al ragù",
+        "Tortellini",
+        "Mortadella"
+      ],
+      "avg_hotel_price": 70
+    },
+    {
+      "id": "verona",
+      "name": "Verona",
+      "region": "Veneto",
+      "station_code": "S02430",
+      "station_name": "VERONA PORTA NUOVA",
+      "coordinates": {
+        "lat": 45.4384,
+        "lon": 10.9916
+      },
+      "population": 260000,
+      "categories": [
+        "romantico",
+        "storia",
+        "cultura",
+        "opera"
+      ],
+      "tags": [
+        "shakespeariana",
+        "romantica",
+        "scaligera"
+      ],
+      "description": "Città di Romeo e Giulietta, arena romana e opera lirica",
+      "min_stay_days": 1.0,
+      "attractions": [
+        {
+          "name": "Arena di Verona",
+          "type": "storico",
+          "rating": 9.2,
+          "duration_hours": 2,
+          "cost_euro": 10,
+          "popularity": 9
+        },
+        {
+          "name": "Casa di Giulietta",
+          "type": "casa",
+          "rating": 7.5,
+          "duration_hours": 1,
+          "cost_euro": 6,
+          "popularity": 8
+        },
+        {
+          "name": "Piazza delle Erbe",
+          "type": "piazza",
+          "rating": 8.5,
+          "duration_hours": 1,
+          "cost_euro": 0,
+          "popularity": 7
+        }
+      ],
+      "food_specialties": [
+        "Risotto all'Amarone",
+        "Pandoro"
+      ],
+      "avg_hotel_price": 75
+    },
+    {
+      "id": "genova",
+      "name": "Genova",
+      "region": "Liguria",
+      "station_code": "S04216",
+      "station_name": "GENOVA PIAZZA PRINCIPE",
+      "coordinates": {
+        "lat": 44.4056,
+        "lon": 8.9463
+      },
+      "population": 580000,
+      "categories": [
+        "mare",
+        "storia",
+        "porto",
+        "gastronomia"
+      ],
+      "tags": [
+        "marinara",
+        "storica",
+        "verticale"
+      ],
+      "description": "Città marinara e porto storico, patria di Colombo",
+      "min_stay_days": 1.0,
+      "attractions": [
+        {
+          "name": "Acquario di Genova",
+          "type": "acquario",
+          "rating": 9.0,
+          "duration_hours": 3,
+          "cost_euro": 28,
+          "popularity": 9
+        },
+        {
+          "name": "Centro Storico (caruggi)",
+          "type": "quartiere",
+          "rating": 8.3,
+          "duration_hours": 2,
+          "cost_euro": 0,
+          "popularity": 7
+        },
+        {
+          "name": "Via Garibaldi (Palazzi dei Rolli)",
+          "type": "via",
+          "rating": 8.5,
+          "duration_hours": 1.5,
+          "cost_euro": 0,
+          "popularity": 6
+        }
+      ],
+      "food_specialties": [
+        "Focaccia",
+        "Pesto",
+        "Farinata"
+      ],
+      "avg_hotel_price": 70
+    },
+    {
+      "id": "pisa",
+      "name": "Pisa",
+      "region": "Toscana",
+      "station_code": "S06500",
+      "station_name": "PISA CENTRALE",
+      "coordinates": {
+        "lat": 43.716,
+        "lon": 10.4013
+      },
+      "population": 90000,
+      "categories": [
+        "arte",
+        "storia",
+        "università"
+      ],
+      "tags": [
+        "torre",
+        "universitaria",
+        "toscana"
+      ],
+      "description": "Famosa per la Torre Pendente e la Piazza dei Miracoli",
+      "min_stay_days": 0.5,
+      "attractions": [
+        {
+          "name": "Torre di Pisa",
+          "type": "torre",
+          "rating": 9.0,
+          "duration_hours": 1.5,
+          "cost_euro": 18,
+          "popularity": 10
+        },
+        {
+          "name": "Piazza dei Miracoli",
+          "type": "piazza",
+          "rating": 9.2,
+          "duration_hours": 2,
+          "cost_euro": 0,
+          "popularity": 10
+        },
+        {
+          "name": "Battistero",
+          "type": "chiesa",
+          "rating": 8.5,
+          "duration_hours": 1,
+          "cost_euro": 5,
+          "popularity": 7
+        }
+      ],
+      "food_specialties": [
+        "Cecina",
+        "Torta co' bischeri"
+      ],
+      "avg_hotel_price": 65
+    }
+  ],
+  "categories_info": {
+    "arte": {
+      "name": "Arte",
+      "description": "Musei, gallerie, capolavori artistici",
+      "icon": "🎨"
+    },
+    "storia": {
+      "name": "Storia",
+      "description": "Siti archeologici, monumenti storici",
+      "icon": "🏛️"
+    },
+    "natura": {
+      "name": "Natura",
+      "description": "Parchi, montagne, laghi, vulcani",
+      "icon": "🌲"
+    },
+    "mare": {
+      "name": "Mare",
+      "description": "Spiagge, coste, attività marine",
+      "icon": "🏖️"
+    },
+    "gastronomia": {
+      "name": "Gastronomia",
+      "description": "Cucina locale, mercati, ristoranti tipici",
+      "icon": "🍝"
+    },
+    "romantico": {
+      "name": "Romantico",
+      "description": "Atmosfere romantiche, tramonti, coppie",
+      "icon": "💕"
+    },
+    "cultura": {
+      "name": "Cultura",
+      "description": "Teatro, cinema, eventi culturali",
+      "icon": "🎭"
+    },
+    "shopping": {
+      "name": "Shopping",
+      "description": "Negozi, boutique, centri commerciali",
+      "icon": "🛍️"
+    }
+  },
+  "metadata": {
+    "version": "1.0",
+    "last_updated": "2026-01-02",
+    "total_cities": 10,
+    "coverage": "Major Italian cities accessible by train"
+  }
+}

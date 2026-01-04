@@ -8,12 +8,14 @@ from flask_cors import CORS
 from datetime import datetime, timedelta
 import sys
 from pathlib import Path
+from dataclasses import asdict, is_dataclass
+from werkzeug.exceptions import HTTPException
 
 # Add src directory to path
 src_path = Path(__file__).parent.parent / 'src'
 sys.path.insert(0, str(src_path))
 
-from itinerary_planner import ItineraryPlanner
+from itinerary_planner import ItineraryPlanner, TripInput
 
 app = Flask(__name__)
 # Enable CORS for frontend communication - allow all origins including file://
@@ -52,18 +54,14 @@ def suggest_cities(start_city, num_days, interests, budget):
         # Fallback to popular cities
         return ['Milano', 'Firenze', 'Roma'][:min(num_days, 3)]
     
-    # List of all major Italian cities (will use OSM for others if needed)
-    all_cities = [
-        'Milano', 'Roma', 'Firenze', 'Venezia', 'Napoli', 
-        'Torino', 'Bologna', 'Verona', 'Genova', 'Pisa',
-        'Padova', 'Parma', 'Modena', 'Trieste', 'Perugia',
-        'Siena', 'Bergamo', 'Brescia', 'Vicenza', 'Trento'
-    ]
+    # Use only cities from static DB to avoid OSM delays
+    # Get all available cities directly from database
+    all_city_names = [city['name'] for city in db.cities.values()]
     
     # Get all cities and calculate scores
     city_scores = []
     
-    for city_name in all_cities:
+    for city_name in all_city_names:
         if city_name == start_city:
             continue
             
@@ -121,7 +119,11 @@ def plan_trip():
     }
     """
     try:
-        data = request.json
+        data = request.get_json(silent=True)
+        if data is None:
+            return jsonify({
+                "error": "JSON body required. Set Content-Type: application/json"
+            }), 400
         print(f"\n🔍 Received request:")
         print(f"   Mode: {data.get('mode')}")
         print(f"   Start: {data.get('start_city')}")
@@ -136,11 +138,36 @@ def plan_trip():
         interests = data.get('interests', ['arte', 'storia'])
         budget = data.get('budget', 200)
         
+        # duration validation
+        try:
+            duration = int(duration)
+        except (TypeError, ValueError):
+            return jsonify({"error": "duration must be an integer (days)"}), 400
+
+        if duration < 1:
+            return jsonify({"error": "duration must be >= 1"}), 400
+
+        # optional: cap it so requests can't explode runtime
+        if duration > 30:
+            return jsonify({"error": "duration too large (max 30)"}), 400
+        
         # Validate required fields
+        missing = []
+
         if not start_city:
-            return jsonify({'error': 'start_city is required'}), 400
-        if not data.get('start_date'):
-            return jsonify({'error': 'start_date is required'}), 400
+            missing.append("start_city")
+
+        if not data.get("start_date"):
+            missing.append("start_date")
+
+        if mode == "smart_fixed" and not end_city:
+            missing.append("end_city")
+
+        if missing:
+            return jsonify({
+                "error": "Missing required fields",
+                "missing": missing
+            }), 400
         
         # Determine cities based on mode
         if mode == 'smart_open':
@@ -173,29 +200,45 @@ def plan_trip():
         # Parse start date
         start_date = datetime.strptime(data['start_date'], '%Y-%m-%d')
         
-        # Generate itinerary
-        print(f"   🚂 Generating itinerary...")
-        itinerary = planner.plan_trip(
-            num_days=duration,
-            city_names=cities,
+        trip_input = TripInput(
+            days=duration,
+            cities=cities,
             interests=interests,
+            start_city=start_city,
+            end_city=end_city,
             budget=budget,
-            start_date=start_date,
-            use_weather=True
+            start_date=start_date
         )
+
+        itinerary = planner.plan_trip(trip_input)
         
+        print("DEBUG itinerary type:", type(itinerary))
+        print("DEBUG itinerary repr:", repr(itinerary)[:500])
+        
+        from dataclasses import asdict, is_dataclass
+
+        # Normalize itinerary to JSON-friendly structures
+        if isinstance(itinerary, list):
+            itinerary_days = [asdict(d) if is_dataclass(d) else d for d in itinerary]
+        else:
+            itinerary_days = itinerary  # fallback
+
         # Format response for frontend
-        response = format_itinerary_for_frontend(itinerary, budget)
+        response = format_itinerary_for_frontend(itinerary_days, budget)
         response['mode'] = mode
         response['suggested_cities'] = cities
         response['route'] = cities
         
-        print(f"   ✅ Success! {len(response.get('itinerary', []))} days planned")
+        print(f"   ✅ Success! {duration} days planned")
         return jsonify(response)
     
     except ValueError as e:
         print(f"   ❌ Validation error: {e}")
-        return jsonify({'error': f'Invalid input: {str(e)}'}), 400
+        return jsonify({"error": "Invalid start_date format. Expected YYYY-MM-DD"}), 400
+    
+    except HTTPException as e:
+        return jsonify({"error": e.description}), e.code
+    
     except Exception as e:
         print(f"   ❌ Server error: {e}")
         import traceback
@@ -252,13 +295,14 @@ def format_itinerary_for_frontend(itinerary, budget):
     
     formatted_days = []
     
-    for i, day in enumerate(itinerary['days']):
+    days = itinerary.get("days") if isinstance(itinerary, dict) else itinerary
+    for i, day in enumerate(days):
         formatted_day = {
             'city': day['city'],
             'date': day['date'].isoformat() if isinstance(day['date'], datetime) else day['date'],
             'available_hours': day.get('available_hours', 8),
             'travel_time': day.get('travel_time', 0),
-            'from_city': itinerary['days'][i-1]['city'] if i > 0 else None,
+            'from_city': days[i-1]['city'] if i > 0 else None,
             'activities': [],
             'daily_cost': day.get('estimated_cost', 0),
             'weather': None
@@ -276,8 +320,8 @@ def format_itinerary_for_frontend(itinerary, budget):
             formatted_activity = {
                 'name': activity['name'],
                 'start_time': activity.get('start_time', '09:00'),
-                'duration': activity['duration_hours'],
-                'cost': activity['cost_euro'],
+                "duration": activity.get("duration_hours", activity.get("duration", 1)),
+                "cost": activity.get("cost_euro", activity.get("cost", 0)),
                 'rating': activity.get('rating', 8.0),
                 'weather_adapted': day.get('weather_adapted', False),
                 'indoor': activity.get('type', '').lower() in ['museum', 'gallery', 'church', 'indoor']
@@ -299,19 +343,21 @@ def format_itinerary_for_frontend(itinerary, budget):
 
 @app.route('/api/cities', methods=['GET'])
 def get_cities():
-    """Get list of available cities"""
-    cities = [
-        {'name': 'Milano', 'region': 'Lombardia'},
-        {'name': 'Roma', 'region': 'Lazio'},
-        {'name': 'Firenze', 'region': 'Toscana'},
-        {'name': 'Venezia', 'region': 'Veneto'},
-        {'name': 'Napoli', 'region': 'Campania'},
-        {'name': 'Torino', 'region': 'Piemonte'},
-        {'name': 'Bologna', 'region': 'Emilia-Romagna'},
-        {'name': 'Verona', 'region': 'Veneto'},
-        {'name': 'Genova', 'region': 'Liguria'},
-        {'name': 'Pisa', 'region': 'Toscana'}
-    ]
+    """Get list of available cities from database"""
+    from city_database import CityDatabase
+    
+    db = CityDatabase()
+    cities = []
+    
+    for city_id, city_data in db.cities.items():
+        cities.append({
+            'name': city_data['name'],
+            'region': city_data.get('region', 'Unknown'),
+            'lat': city_data['coordinates']['lat'],
+            'lon': city_data['coordinates']['lon'],
+            'has_station': city_data.get('station_code') is not None or city_data.get('has_train_station', False)
+        })
+    
     return jsonify(cities)
 
 
