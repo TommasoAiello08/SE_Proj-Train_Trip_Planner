@@ -59,6 +59,30 @@ class CityDatabase:
         
         return None
     
+    def is_italy(self, coords: dict) -> bool:
+        # Nominatim style: display_name usually contains ", Italy"
+        dn = (coords or {}).get("display_name", "") or ""
+        print(dn)
+        # be permissive: Italy / Italia
+        return ("Italy" in dn) or ("Italia" in dn)
+
+    def validate_osm_result(self, city_name: str, coords: dict, station: dict) -> None:
+        # Must have coordinates
+        if not coords or "lat" not in coords or "lon" not in coords:
+            raise ValueError(f"Unsupported city '{city_name}': no coordinates found")
+
+        # Must be in Italy
+        if not self.is_italy(coords):
+            raise ValueError(f"Unsupported city '{city_name}': only Italian cities are supported")
+
+        # Must have a train station
+        # (your get_train_station returns something truthy when found)
+        if station:
+            print(f"   🚉 Found train station: {station.get('name', 'unknown')}")
+        else:
+            raise ValueError(f"Unsupported city '{city_name}': no train station found")
+
+    
     def _fetch_city_from_osm(self, city_name: str) -> Optional[Dict]:
         """Create city entry from OSM data on-demand"""
         try:
@@ -66,34 +90,54 @@ class CityDatabase:
             coords = self.osm_provider.get_city_coordinates(city_name)
             if not coords:
                 return None
-            
-            # POIs
-            pois = self.osm_provider.get_city_pois(city_name)
-            
-            # Train station
+
+            # Train station (require it)
             station = self.osm_provider.get_train_station(city_name)
-            
+
+            # Validate against your constraints (Italy + station + coords)
+            self.validate_osm_result(city_name, coords, station)
+
+            # POIs (optional, can be empty)
+            pois = self.osm_provider.get_city_pois(city_name) or []
+
             # Build database-compatible entry
             city_entry = {
                 'id': f"osm_{city_name.lower().replace(' ', '_')}",
                 'name': city_name,
-                'region': coords.get('display_name', '').split(',')[-2].strip() if ',' in coords.get('display_name', '') else 'Unknown',
-                'latitude': coords['lat'],
-                'longitude': coords['lon'],
-                'station_code': station.get('name', city_name) if station else city_name,
+                'region': coords.get('display_name', '').split(',')[-2].strip()
+                        if ',' in coords.get('display_name', '') else 'Unknown',
+
+                # ✅ IMPORTANT: provide the schema expected by travel_graph
+                'coordinates': {
+                    'lat': float(coords['lat']),
+                    'lon': float(coords['lon']),
+                },
+
+                # (optional) keep these if other code uses them
+                'latitude': float(coords['lat']),
+                'longitude': float(coords['lon']),
+
+                'station_code': station.get('name', city_name),
                 'attractions': pois,
-                'categories': list(set(cat for poi in pois for cat in poi.get('categories', []))),
-                'average_cost_per_day': 60,  # Default estimate
+                'categories': list({cat for poi in pois for cat in poi.get('categories', [])}),
+                'average_cost_per_day': 60,
                 'food_specialties': [],
-                'osm_source': True  # Flag indicating OSM source
+                'osm_source': True
             }
-            
-            print(f"  ✅ Created city from OSM: {len(pois)} POIs found")
+
+            print(f"✅ Created city from OSM: {len(pois)} POIs found")
             return city_entry
-            
-        except Exception as e:
-            print(f"  ❌ Error fetching OSM data for {city_name}: {e}")
+
+        except ValueError as e:
+            # Validation failure => treat as "unsupported city"
+            print(f"❌ {e}")
             return None
+
+        except Exception as e:
+            print(f"❌ Error fetching OSM data for {city_name}: {e}")
+            return None
+
+        
     
     def get_all_cities(self) -> List[Dict]:
         """Get all cities"""
