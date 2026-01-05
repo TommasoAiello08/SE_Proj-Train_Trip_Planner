@@ -379,7 +379,9 @@ class DPItineraryPlanner:
                     if train_info:
                         train_matrix[day][origin][dest] = train_info
             
-
+        return train_matrix
+    
+    def _find_best_train(
         self,
         origin_city: str,
         dest_city: str,
