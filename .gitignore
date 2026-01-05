@@ -10,6 +10,7 @@ build/
 .venv/
 venv/
 ENV/
+*.pyc
 
 # IDE
 .vscode/
@@ -21,17 +22,30 @@ ENV/
 # OS
 .DS_Store
 Thumbs.db
+._*
 
-# Project specific
+# Project specific - Cache
 cache/*.json
 cache/osm/*.json
-*.log
-
-# Keep cache directory structure but not files
+cache/weather/*.json
 !cache/.gitkeep
 !cache/osm/.gitkeep
+!cache/weather/.gitkeep
+
+# Logs
+*.log
+/tmp/
+logs/
 
 # Backup files
 *.bak
-*_OLD.md
-README_OLD.md
+*_OLD.*
+
+# Test output
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment
+.env
+.env.local

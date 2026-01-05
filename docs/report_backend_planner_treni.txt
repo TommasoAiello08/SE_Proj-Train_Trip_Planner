@@ -1,0 +1,319 @@
+REPORT – Algoritmo Backend per Planner di Viaggi in Treno (Italia)
+
+Data: 2026-01-05
+Timezone: Europe/Rome
+
+========================================
+1) Obiettivo del progetto
+========================================
+Realizzare un backend che, dati:
+- città/provincia di partenza
+- città/provincia di arrivo
+- numero di giorni (o date di viaggio)
+- preferenze utente (es. natura, cultura, arte, storia…)
+- integrazione con una API treni già disponibile
+produca un itinerario (multi-tappa) che:
+- parte dalla città di partenza
+- arriva a destinazione entro l’ultimo giorno
+- massimizza la “soddisfazione” secondo le preferenze
+- rispetta budget temporali (ore disponibili al giorno) e vincoli di spostamento (tempi treno, buffer, ecc.)
+
+I dati disponibili includono:
+A) Province/città con stazione e attrazioni per categoria
+B) Treni con origine/destinazione, orari, durata, prezzo stimato, fermate ecc.
+
+========================================
+2) Modellazione consigliata
+========================================
+
+2.1 Grafo delle province/città
+- Nodo: provincia (o città-stazione principale).
+- Arco diretto A -> B: esiste almeno un treno “fattibile” (in base alle date/orari richiesti)
+  e lo spostamento è consentito dal modello (es. max 4 ore di treno per salto, ecc.).
+
+Costo dell’arco (esempi):
+- travel_time = durata_treno + buffer_accesso_stazione + buffer_margine
+- travel_cost = prezzo_stimato (opzionale)
+- reliability_penalty = funzione(ritardo_minuti o storico) (opzionale)
+
+Nota: nella prima versione (MVP) è spesso sufficiente usare:
+- “miglior treno” per la coppia (A,B) nel giorno (min durata o min prezzo) e un buffer fisso.
+
+2.2 Reward / Punteggio delle province
+Le attrazioni hanno: rating, popularity, duration_hours, cost_euro, categories.
+Si definisce un punteggio per attrazione, poi un reward aggregato per provincia.
+
+Esempio di scoring attrazione:
+- match = 1 se l’attrazione appartiene a categorie preferite dall’utente, altrimenti 0
+- score_attr = w_match*match + w_rating*norm(rating) + w_pop*norm(popularity)
+             - w_cost*norm(cost_euro) - w_time*norm(duration_hours)
+
+Esempio reward provincia:
+- reward_provincia = max_punteggio_attrazioni_sotto_budget_ore
+  (vedi “Knapsack” in sezione 4).
+
+2.3 Vincoli temporali
+- N giorni totali.
+- Ogni giorno ha un budget di ore “utili” (es. 8–10 ore).
+- Ogni tappa richiede:
+  - tempo di viaggio (treno + buffer)
+  - tempo di permanenza (min_stay_days -> ore minime) + attrazioni selezionate
+
+Min stay:
+- Convertire min_stay_days in ore minime:
+  min_stay_hours = min_stay_days * HOURS_PER_DAY
+  Dove HOURS_PER_DAY può essere 6–8 (scelta progettuale).
+  Esempio: HOURS_PER_DAY = 6  => 1.0 day = 6 ore minime.
+
+========================================
+3) Strategia suggerita (consigliata): DP per macro-itinerario + Knapsack per attrazioni
+========================================
+
+Questa soluzione è:
+- implementabile rapidamente
+- scalabile con ~106 province
+- estendibile con vincoli aggiuntivi
+- adatta per produrre anche più itinerari con piccole varianti (estensione Beam Search)
+
+----------------------------------------
+3.1 Pipeline end-to-end (Backend)
+----------------------------------------
+INPUT:
+- start_province_id
+- end_province_id
+- travel_days (N) o date (lista di date)
+- preferences: lista categorie + pesi (es. {"natura": 1.0, "arte": 0.8, ...})
+- (opzionale) budget: max costo, max ore treno/giorno, ecc.
+
+STEP 1: Normalizzazione preferenze e pesi
+- Convertire preferenze in una mappa pesi categorie.
+- Impostare default se assenti.
+
+STEP 2: Calcolo score per province
+- Per ogni provincia: calcolare un “potential reward” basato su attrazioni e preferenze.
+- Usare questo per ordinare e selezionare candidati.
+
+STEP 3: Candidate selection (riduzione complessità)
+- Prendere top-N province più rilevanti (N=20–40) + includere sempre start e end.
+- (Facoltativo) vincolo: non più di M province per macro-area (Nord/Centro/Sud) per varietà.
+- (Facoltativo) vincolo: escludere salti con distanza/stima tempo eccessiva.
+
+STEP 4: Costruzione matrice tempi treno tra candidati (caching)
+- Per ogni coppia (A,B) candidati e per ogni giorno/data:
+  - interrogare la API treni
+  - selezionare una o più opzioni (min durata, min prezzo, ecc.)
+  - salvare in cache: (A,B,day)-> {best_train, travel_time, price, ...}
+  - (se no treni): arco assente.
+
+STEP 5: Algoritmo macro (DP a giorni)
+- Risultato: sequenza province per giorni.
+- Vincolo: arrivare a destinazione entro N.
+
+STEP 6: Micro-planning per provincia (Knapsack attrazioni)
+- Per ogni tappa: scegliere attrazioni che massimizzano punteggio entro ore disponibili.
+- Produrre lista attrazioni con ordine semplice (es. per punteggio o clustering geografico).
+
+OUTPUT:
+- JSON itinerary: giorno->treno->province->attrazioni->orari stimati
+
+----------------------------------------
+3.2 Dynamic Programming (DP) “a giorni”
+----------------------------------------
+
+Definizioni:
+- Let candidate provinces set = C
+- N = numero di giorni
+- day_budget_hours = ore totali per giorno (es. 10)
+- stay_hours(B) = min_stay_hours(B) (e/o determinato dal micro-planning)
+
+State:
+- dp[d][B] = miglior punteggio raggiungendo la provincia B a fine giorno d
+- prev[d][B] = predecessore A scelto per ricostruire il path
+
+Transizione:
+- da A a B se:
+  travel_time(A,B,d) + stay_hours(B) <= day_budget_hours
+- update:
+  dp[d+1][B] = max(dp[d+1][B], dp[d][A] + reward(B,d))
+
+Inizializzazione:
+- dp[0][start] = reward(start, day1) oppure 0 (a seconda del modello)
+- altri = -inf
+
+Vincolo finale:
+- soluzione migliore = dp[N][end] (o max_{d<=N} dp[d][end] se permetti arrivare prima)
+
+Ricostruzione:
+- backtrack da (N,end) usando prev
+
+Nota “reward(B,d)”:
+- può essere costante per provincia (base reward)
+- o dipendente dal giorno (se vuoi: weekend più valore, eventi, ecc.)
+
+----------------------------------------
+3.3 Estensioni facili al DP
+----------------------------------------
+- Penalità per troppe ore di treno nello stesso giorno:
+  aggiungere un termine -w_train * travel_time(A,B)
+- Budget costo:
+  aggiungere dimensione “costo” (DP 2D) o aggiungere penalità e filtrare
+- Evitare ripetizioni di regioni/categorie:
+  aggiungere penalità se “region repeats” o “categorie simili” eccessive
+- Top-K itinerari:
+  mantenere non solo il max ma le migliori K scelte per stato (beam-like)
+
+========================================
+4) Micro-planning attrazioni (Knapsack)
+========================================
+
+Per una provincia B in un giorno:
+- Hai set di attrazioni A1..Am con:
+  - duration_hours
+  - score_attr
+- Hai budget ore disponibili:
+  avail_hours = day_budget_hours - travel_time_into_B - min_stay_buffer
+
+Obiettivo:
+- massimizzare somma(score_attr) sotto vincolo somma(duration_hours) <= avail_hours
+
+Soluzioni:
+A) Knapsack 0/1 (dinamica)
+- discretizzare le ore (es. step 0.5h) per DP efficiente
+B) Greedy (MVP più semplice)
+- ordina per score_attr/duration e prendi finché c’è budget
+C) Approccio ibrido
+- greedy per selezione rapida + piccolo miglioramento locale (swap)
+
+Output micro:
+- lista attrazioni selezionate + tempo totale stimato + costo totale stimato
+- (opzionale) ordine visita: euristica semplice (nearest neighbor su lat/lon)
+
+========================================
+5) Approccio alternativo per “più itinerari”: Beam Search / A*
+========================================
+
+Quando vuoi proporre 3–5 alternative (culture-first, nature-first, budget-first):
+- usa Beam Search:
+  - mantieni le migliori K soluzioni parziali per giorno (K=20–200)
+  - espandi verso province raggiungibili
+  - tieni traccia score e vincoli
+- utile per evitare che il DP produca una sola soluzione molto simile
+
+========================================
+6) Approccio “industrial/ottimale”: OR-Tools (CP-SAT) / MIP
+========================================
+
+Se volete una soluzione “da ricerca operativa”:
+- formulate variabili binarie per scegliere archi e giorni
+- vincoli di flusso (start->...->end), budget tempo per giorno, ecc.
+- obiettivo: max reward
+
+Pro:
+- spesso ottimo/ottimale
+Contro:
+- maggiore complessità di implementazione e debug
+- serve discretizzare bene tempi e vincoli
+
+========================================
+7) Scelte backend consigliate (pratiche)
+========================================
+
+7.1 Caching dei treni
+Le API treni possono essere lente e dipendere dalla data:
+- Cache key: (codice_stazione_A, codice_stazione_B, date)
+- Cache value: lista opzioni (min durata, min prezzo, ecc.)
+- TTL: qualche ora o 1 giorno, a seconda della variabilità dei dati
+- Fallback: se API down, usare ultimo valore cache (se accettabile)
+
+7.2 Pre-calcolo province candidate
+- Pre-calcolare “embedding/score” categorie (anche solo vettore di categorie)
+- Index in memoria per filtri rapidi
+
+7.3 Struttura output (esempio)
+itinerary = {
+  "days": [
+    {
+      "day_index": 1,
+      "from": {province/station},
+      "to": {province/station},
+      "train": {numero_treno, orari, durata, prezzo_stimato},
+      "stay": {
+        "province_id": "...",
+        "selected_attractions": [...],
+        "total_attraction_hours": ...,
+        "estimated_cost": ...
+      }
+    },
+    ...
+  ],
+  "total_score": ...,
+  "total_train_hours": ...,
+  "total_cost_estimate": ...
+}
+
+========================================
+8) MVP consigliato (ordine di implementazione)
+========================================
+
+MVP 1:
+- Candidate selection (top-N)
+- Matrice travel_time da API treni + cache
+- DP a giorni (max reward)
+- Greedy attrazioni per provincia
+- Output JSON
+
+MVP 2:
+- Knapsack attrazioni (migliore qualità)
+- Beam Search per 3 itinerari alternativi
+- Penalità zig-zag e troppi treni
+
+MVP 3:
+- OR-Tools CP-SAT come “modalità ottimale” (facoltativa)
+
+========================================
+9) Pseudocodice (alta-level)
+========================================
+
+(1) Score province:
+for province in provinces:
+  province.base_score = compute_base_score(province.attractions, user_prefs)
+
+(2) Candidate selection:
+C = topN(provinces by base_score) ∪ {start,end}
+
+(3) Train matrix (per day):
+for day in 1..N:
+  for A in C:
+    for B in C:
+      if A!=B:
+        travel[day][A][B] = best_train_option_or_INF(A,B,day)
+
+(4) DP:
+init dp[0][start]=0
+for d in 0..N-1:
+  for A in C:
+    if dp[d][A] is valid:
+      for B in C:
+        t = travel[d+1][A][B]
+        if t != INF and t + stay_hours(B) <= day_budget:
+          val = dp[d][A] + reward(B)
+          if val > dp[d+1][B]:
+            dp[d+1][B]=val
+            prev[d+1][B]=A
+
+(5) Backtrack:
+path = reconstruct(prev, N, end)
+
+(6) Micro-planning:
+for each province in path:
+  selected = choose_attractions_knapsack(province.attractions, available_hours, user_prefs)
+
+========================================
+10) Nota finale: perché questa soluzione è adatta
+========================================
+- I nodi sono pochi (106 province): DP e beam search sono gestibili.
+- Il grosso rischio è la “combinatoria” se non restringete i candidati: top-N la risolve.
+- Separare macro (province) e micro (attrazioni) rende il sistema modulare e testabile.
+- La cache treni è fondamentale per prestazioni e stabilità.
+
+Fine report.

@@ -45,36 +45,46 @@ SEProejct/
 
 ```bash
 git clone https://github.com/TommasoAiello08/SE_Proj-Train_Trip_Planner.git
-cd SE_Proj-Train_Trip_Planner
+cd SEProejct
 python3 -m venv .venv
-source .venv/bin/activate  # macOS/Linux
-# oppure: .venv\Scripts\activate  # Windows
 pip install -r requirements.txt
 ```
 
-### 2. Avvio Sistema (2 terminali)
+### 2. Avvio Sistema (Automatico) ⚡
+
+```bash
+source .venv/bin/activate  # macOS/Linux
+# oppure: .venv\Scripts\activate  # Windows
+./start.sh
+```
+
+Lo script `start.sh` automaticamente:
+- 🔄 Termina processi precedenti sulle porte 5001 e 8080
+- 🚀 Avvia il backend Flask (porta 5001)
+- 🌐 Avvia il frontend HTTP server (porta 8080)
+- 🔗 Apre automaticamente il browser su **http://localhost:8080/map_planner.html**
+- 📝 Log disponibili in `/tmp/backend.log` e `/tmp/frontend.log`
+
+**Per fermare i server:**
+```bash
+./stop.sh
+```
+
+### 3. Avvio Manuale (Opzionale)
+
+Se preferisci avviare manualmente (2 terminali):
 
 **Terminal 1 - Backend:**
 ```bash
-cd SE_Proj-Train_Trip_Planner
 source .venv/bin/activate
 python frontend/backend_server.py
 ```
 
-**Output atteso:**
-```
-✅ Database loaded: 106 cities
-🚂 Starting Italian Train Trip Planner Backend...
- * Running on http://127.0.0.1:5001
-```
-
-**Terminal 2 - Frontend Server:**
+**Terminal 2 - Frontend:**
 ```bash
-cd SE_Proj-Train_Trip_Planner/frontend
+cd frontend
 python3 -m http.server 8080
 ```
-
-### 3. Apertura Applicazione
 
 Apri nel browser: **http://localhost:8080/map_planner.html**
 
@@ -110,29 +120,34 @@ L'itinerario mostra per ogni giorno:
 
 ### ❌ Errore: "Failed to fetch" o CORS errors
 
+**Soluzione Rapida:**
+```bash
+./stop.sh && ./start.sh
+```
+
 **Causa**: Frontend non servito via HTTP o backend spento
 
-**Soluzione**:
+**Soluzione Manuale**:
 1. Verifica che **entrambi i server** siano attivi:
-   - **Terminal 1**: Backend su porta 5001
-   - **Terminal 2**: `python3 -m http.server 8080` in cartella frontend/
+   - **Backend**: porta 5001
+   - **Frontend**: porta 8080
 2. Accedi a: **http://localhost:8080/map_planner.html** (non file://)
-3. Verifica output backend: `* Running on http://127.0.0.1:5001`
+3. Controlla i log: `/tmp/backend.log` e `/tmp/frontend.log`
 4. Ricarica pagina browser (F5)
 
-**⚠️ Importante**: NON aprire il file HTML direttamente con doppio click. Usa sempre il server HTTP sulla porta 8080.
+**⚠️ Importante**: NON aprire il file HTML direttamente con doppio click. Usa sempre `./start.sh` per avviare il sistema.
 
 ### Se la porta 5001 o 8080 è occupata
 
 ```bash
-# Verifica porte
+./stop.sh  # Termina automaticamente processi sulle porte 5001 e 8080
+./start.sh # Riavvia il sistema
+```
+
+**Verifica manuale:**
+```bash
 lsof -i :5001  # Backend
 lsof -i :8080  # Frontend
-
-# Termina processo
-kill -9 <PID>
-
-# Riavvia servers
 ```
 
 ### Mappa non carica le 106 città
@@ -183,6 +198,13 @@ SEProejct/
 
 ## 🛠️ Scripts Utili
 
+### Avvio/Arresto Sistema
+```bash
+source .venv/bin/activate
+./start.sh  # Avvia backend + frontend + apre browser
+./stop.sh   # Ferma tutti i server
+```
+
 ### Rigenera Database da OSM
 ```bash
 python scripts/build_complete_database.py
@@ -210,7 +232,11 @@ MIT License - vedi LICENSE file per dettagli
 
 ---
 
-**🚀 Quick Start**: `python frontend/backend_server.py` + `cd frontend && python3 -m http.server 8080` → http://localhost:8080/map_planner.html
+**🚀 Quick Start**: 
+```bash
+source .venv/bin/activate && ./start.sh
+```
+
 ## 🎯 API Backend
 
 ### POST `/api/plan`

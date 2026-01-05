@@ -15,7 +15,7 @@ from werkzeug.exceptions import HTTPException
 src_path = Path(__file__).parent.parent / 'src'
 sys.path.insert(0, str(src_path))
 
-from itinerary_planner import ItineraryPlanner, TripInput
+from dp_itinerary_planner import DPItineraryPlanner, TripInput
 
 app = Flask(__name__)
 # Enable CORS for frontend communication - allow all origins including file://
@@ -27,8 +27,8 @@ CORS(app, resources={
     }
 })
 
-# Initialize planner
-planner = ItineraryPlanner()
+# Initialize planner - nuovo DP planner con API treni reali
+planner = DPItineraryPlanner()
 
 
 def suggest_cities(start_city, num_days, interests, budget):
@@ -96,6 +96,46 @@ def suggest_cities(start_city, num_days, interests, budget):
     return suggested
 
 
+@app.route('/api/estimate-time', methods=['POST'])
+def estimate_time():
+    """
+    Stima tempo di computazione prima di eseguire plan
+    """
+    try:
+        data = request.get_json(silent=True)
+        if not data:
+            return jsonify({"error": "JSON body required"}), 400
+        
+        duration = data.get('duration', 2)
+        
+        # Crea planner temporaneo per stima
+        from dp_itinerary_planner import TripInput
+        trip_input = TripInput(
+            days=duration,
+            start_city=data.get('start_city', 'Milano'),
+            end_city=data.get('end_city', 'Roma'),
+            interests=data.get('interests', ['arte']),
+            start_date=datetime.now()
+        )
+        
+        estimate = planner.estimate_computation_time(trip_input)
+        
+        return jsonify({
+            'estimated_seconds': estimate['total_estimated'],
+            'estimated_minutes': estimate['total_estimated'] / 60,
+            'num_api_calls': estimate['num_api_calls'],
+            'breakdown': {
+                'candidate_selection': estimate['candidate_selection'],
+                'train_matrix': estimate['train_matrix'],
+                'optimization': estimate['dp_optimization'],
+                'details': estimate['detail_generation']
+            }
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/plan', methods=['POST'])
 def plan_trip():
     """
@@ -124,12 +164,6 @@ def plan_trip():
             return jsonify({
                 "error": "JSON body required. Set Content-Type: application/json"
             }), 400
-        print(f"\n🔍 Received request:")
-        print(f"   Mode: {data.get('mode')}")
-        print(f"   Start: {data.get('start_city')}")
-        print(f"   End: {data.get('end_city')}")
-        print(f"   Cities: {data.get('cities')}")
-        print(f"   Duration: {data.get('duration')} days")
         
         mode = data.get('mode', 'smart_open')
         start_city = data.get('start_city')
@@ -169,30 +203,26 @@ def plan_trip():
                 "missing": missing
             }), 400
         
-        # Determine cities based on mode
+        # Determine end city based on mode
         if mode == 'smart_open':
             # AI suggests destinations from start city
-            print(f"   → Smart Open: suggesting destinations from {start_city}")
-            cities = suggest_cities(start_city, duration, interests, budget)
+            suggested = suggest_cities(start_city, duration, interests, budget)
+            end_city = suggested[-1] if len(suggested) > 1 else start_city
             
         elif mode == 'smart_fixed':
-            # AI suggests route from start to end
+            # DP trova route ottimale tra start e end
             if not end_city:
                 return jsonify({'error': 'end_city required for smart_fixed mode'}), 400
-            print(f"   → Smart Fixed: route from {start_city} to {end_city}")
-            cities = suggest_route_between(start_city, end_city, duration, interests, budget)
             
         elif mode == 'custom':
-            # User provides all cities
+            # User fornisce lista città: usa prima e ultima come start/end
             cities = data.get('cities', [])
             if not cities or len(cities) < 2:
                 return jsonify({'error': 'custom mode requires at least 2 cities'}), 400
-            print(f"   → Custom: user route {cities}")
+            start_city = cities[0]
+            end_city = cities[-1]
         else:
             return jsonify({'error': f'Invalid mode: {mode}'}), 400
-        
-        print(f"   ✓ Final route: {cities}")
-        print(f"   ✓ Final route: {cities}")
         
         if not data.get('interests'):
             interests = ['arte', 'storia', 'cultura']
@@ -200,12 +230,12 @@ def plan_trip():
         # Parse start date
         start_date = datetime.strptime(data['start_date'], '%Y-%m-%d')
         
+        # Nuovo TripInput per DP planner (start+end, non più lista cities)
         trip_input = TripInput(
             days=duration,
-            cities=cities,
-            interests=interests,
             start_city=start_city,
             end_city=end_city,
+            interests=interests,
             budget=budget,
             start_date=start_date
         )
@@ -223,11 +253,20 @@ def plan_trip():
         else:
             itinerary_days = itinerary  # fallback
 
+        # Estrai route dall'itinerario generato dal DP
+        route = []
+        for day in itinerary_days:
+            city = day.get('city')
+            if city and city not in route:
+                route.append(city)
+        
         # Format response for frontend
         response = format_itinerary_for_frontend(itinerary_days, budget)
         response['mode'] = mode
-        response['suggested_cities'] = cities
-        response['route'] = cities
+        response['suggested_cities'] = route
+        response['route'] = route
+        response['total_days'] = duration
+        response['itinerary'] = response.get('days', [])  # Aggiungi alias per compatibilità frontend
         
         print(f"   ✅ Success! {duration} days planned")
         return jsonify(response)
@@ -240,7 +279,6 @@ def plan_trip():
         return jsonify({"error": e.description}), e.code
     
     except Exception as e:
-        print(f"   ❌ Server error: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': f'Server error: {str(e)}'}), 500
@@ -297,14 +335,21 @@ def format_itinerary_for_frontend(itinerary, budget):
     
     days = itinerary.get("days") if isinstance(itinerary, dict) else itinerary
     for i, day in enumerate(days):
+        # Debug: log train info
+        if day.get('morning_train'):
+            print(f"   🚂 Day {i+1} has train: {day.get('from_city')} → {day.get('city')}")
+        
         formatted_day = {
+            'day_number': i + 1,
             'city': day['city'],
             'date': day['date'].isoformat() if isinstance(day['date'], datetime) else day['date'],
             'available_hours': day.get('available_hours', 8),
             'travel_time': day.get('travel_time', 0),
-            'from_city': days[i-1]['city'] if i > 0 else None,
+            'from_city': day.get('from_city') or (days[i-1]['city'] if i > 0 else None),
+            'morning_train': day.get('morning_train'),
+            'pois': day.get('pois', []),
             'activities': [],
-            'daily_cost': day.get('estimated_cost', 0),
+            'daily_cost': day.get('estimated_cost', 0) or day.get('daily_cost', 0),
             'weather': None
         }
         
