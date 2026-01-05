@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🗺️ Mappa Interattiva - Train Planner</title>
+    <title>🗺️ Interactive Map - Train Planner</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         * {
@@ -242,56 +242,56 @@
 
             <form id="planForm">
                 <div class="form-group">
-                    <label>Data Partenza *</label>
+                    <label>Departure Date *</label>
                     <input type="date" id="startDate" required>
                 </div>
 
                 <div class="form-group">
-                    <label>Durata (giorni) *</label>
+                    <label>Duration (days) *</label>
                     <select id="duration" required>
-                        <option value="1">1 giorno</option>
-                        <option value="2" selected>2 giorni</option>
-                        <option value="3">3 giorni</option>
-                        <option value="4">4 giorni</option>
-                        <option value="5">5 giorni</option>
+                        <option value="1">1 day</option>
+                        <option value="2" selected>2 days</option>
+                        <option value="3">3 days</option>
+                        <option value="4">4 days</option>
+                        <option value="5">5 days</option>
                     </select>
                 </div>
 
                 <div class="form-group">
-                    <label>I tuoi interessi (opzionale)</label>
+                    <label>Your interests (optional)</label>
                     <div class="interest-tags">
                         <label class="interest-tag">
-                            <input type="checkbox" name="interests" value="arte">
-                            <span>🎨 Arte</span>
+                            <input type="checkbox" name="interests" value="art">
+                            <span>🎨 Art</span>
                         </label>
                         <label class="interest-tag">
-                            <input type="checkbox" name="interests" value="storia">
-                            <span>🏛️ Storia</span>
+                            <input type="checkbox" name="interests" value="history">
+                            <span>🏛️ History</span>
                         </label>
                         <label class="interest-tag">
-                            <input type="checkbox" name="interests" value="natura">
-                            <span>🌲 Natura</span>
+                            <input type="checkbox" name="interests" value="nature">
+                            <span>🌲 Nature</span>
                         </label>
                         <label class="interest-tag">
-                            <input type="checkbox" name="interests" value="cibo">
-                            <span>🍝 Cibo</span>
+                            <input type="checkbox" name="interests" value="food">
+                            <span>🍝 Food</span>
                         </label>
                         <label class="interest-tag">
-                            <input type="checkbox" name="interests" value="mare">
-                            <span>🌊 Mare</span>
+                            <input type="checkbox" name="interests" value="sea">
+                            <span>🌊 Sea</span>
                         </label>
                         <label class="interest-tag">
-                            <input type="checkbox" name="interests" value="montagna">
-                            <span>⛰️ Montagna</span>
+                            <input type="checkbox" name="interests" value="mountain">
+                            <span>⛰️ Mountain</span>
                         </label>
                     </div>
                 </div>
 
                 <button type="submit" class="btn-primary" id="submitBtn" disabled>
-                    🔍 Pianifica Viaggio
+                    🔍 Plan Trip
                 </button>
                 <button type="button" class="btn-secondary" id="resetBtn">
-                    🔄 Reset Selezione
+                    🔄 Reset Selection
                 </button>
             </form>
         </div>
@@ -305,8 +305,8 @@
     <div id="itinerarySection" style="display: none;">
         <div style="max-width: 1200px; margin: 0 auto; padding: 20px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
-                <h2 style="color: #667eea; margin: 0;">📍 Il Tuo Itinerario</h2>
-                <button onclick="goBackToMap()" class="btn-secondary">🔙 Torna alla Mappa</button>
+                <h2 style="color: #667eea; margin: 0;">📍 Your Itinerary</h2>
+                <button onclick="goBackToMap()" class="btn-secondary">🔙 Back to Map</button>
             </div>
             
             <div id="itineraryContent"></div>
@@ -317,8 +317,8 @@
     <div id="loadingOverlay" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 10000; justify-content: center; align-items: center; backdrop-filter: blur(4px);">
         <div style="background: white; padding: 50px; border-radius: 20px; max-width: 550px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
             <div style="font-size: 64px; margin-bottom: 20px; animation: train-move 2s infinite;">🚂</div>
-            <h2 style="margin: 0 0 10px 0; color: #1f2937; font-size: 28px;">Pianificazione in corso...</h2>
-            <p id="loadingMessage" style="color: #6b7280; margin: 0 0 30px 0; font-size: 16px;">Analizzando le migliori opzioni di viaggio</p>
+            <h2 style="margin: 0 0 10px 0; color: #1f2937; font-size: 28px;">Planning in progress...</h2>
+            <p id="loadingMessage" style="color: #6b7280; margin: 0 0 30px 0; font-size: 16px;">Analyzing the best travel options</p>
             
             <!-- Progress bar -->
             <div style="background: #e5e7eb; height: 12px; border-radius: 6px; overflow: hidden; margin-bottom: 20px;">
@@ -328,10 +328,10 @@
             <div id="timeEstimate" style="color: #9ca3af; font-size: 15px; margin-bottom: 25px; font-weight: 500;"></div>
             
             <div id="loadingSteps" style="text-align: left; color: #6b7280; font-size: 15px; background: #f9fafb; padding: 20px; border-radius: 12px;">
-                <div id="step1" style="margin: 10px 0; padding: 8px; border-radius: 6px;">⏳ Selezione province candidate...</div>
-                <div id="step2" style="margin: 10px 0; padding: 8px; border-radius: 6px;">⏳ Ricerca treni disponibili...</div>
-                <div id="step3" style="margin: 10px 0; padding: 8px; border-radius: 6px;">⏳ Ottimizzazione percorso...</div>
-                <div id="step4" style="margin: 10px 0; padding: 8px; border-radius: 6px;">⏳ Selezione attrazioni...</div>
+                <div id="step1" style="margin: 10px 0; padding: 8px; border-radius: 6px;">⏳ Selecting candidate provinces...</div>
+                <div id="step2" style="margin: 10px 0; padding: 8px; border-radius: 6px;">⏳ Searching available trains...</div>
+                <div id="step3" style="margin: 10px 0; padding: 8px; border-radius: 6px;">⏳ Optimizing route...</div>
+                <div id="step4" style="margin: 10px 0; padding: 8px; border-radius: 6px;">⏳ Selecting attractions...</div>
             </div>
         </div>
     </div>
@@ -340,7 +340,7 @@
     <div id="trainModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 11000; justify-content: center; align-items: center;" onclick="closeTrainModal()">
         <div style="background: white; padding: 40px; border-radius: 20px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.4);" onclick="event.stopPropagation()">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
-                <h2 style="margin: 0; color: #1f2937; font-size: 26px;">🚂 Dettagli Treno</h2>
+                <h2 style="margin: 0; color: #1f2937; font-size: 26px;">🚂 Train Details</h2>
                 <button onclick="closeTrainModal()" style="background: #e5e7eb; border: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; font-size: 20px; color: #6b7280;">×</button>
             </div>
             <div id="trainModalContent"></div>
@@ -400,7 +400,7 @@
                 console.log(`✅ Loaded ${provinces.length} provinces on map`);
             } catch (error) {
                 console.error('Error loading provinces:', error);
-                alert(`⚠️ Impossibile caricare le città dal backend.\nAssicurati che il server sia attivo su ${BACKEND_URL}\n\nErrore: ${error.message}`);
+                alert(`⚠️ Unable to load cities from backend.\nMake sure the server is running on ${BACKEND_URL}\n\nError: ${error.message}`);
             }
         }
 
@@ -451,9 +451,9 @@
             const instructions = document.getElementById('instructions');
 
             if (!selectedStart) {
-                display.innerHTML = '<small style="color: #6b7280;">Nessuna selezione</small>';
+                display.innerHTML = '<small style="color: #6b7280;">No selection</small>';
                 submitBtn.disabled = true;
-                instructions.innerHTML = '📍 Clicca su una città sulla mappa per selezionare la partenza';
+                instructions.innerHTML = '📍 Click on a city on the map to select departure';
                 return;
             }
 
@@ -463,14 +463,14 @@
                 if (selectedEnd) {
                     html += `<div class="city-badge end">🔴 ${selectedEnd}</div>`;
                     submitBtn.disabled = false;
-                    instructions.innerHTML = '✅ Partenza e arrivo selezionate. Clicca "Pianifica Viaggio"';
+                    instructions.innerHTML = '✅ Departure and arrival selected. Click "Plan Trip"';
                 } else {
                     submitBtn.disabled = true;
-                    instructions.innerHTML = '📍 Ora clicca su una città di arrivo';
+                    instructions.innerHTML = '📍 Now click on an arrival city';
                 }
             } else {
                 submitBtn.disabled = false;
-                instructions.innerHTML = '✅ Partenza selezionata. Il sistema suggerirà le destinazioni!';
+                instructions.innerHTML = '✅ Departure selected. The system will suggest destinations!';
             }
 
             display.innerHTML = html;
@@ -631,7 +631,7 @@
             } catch (error) {
                 console.error('Error:', error);
                 showLoading(false);
-                alert(`❌ Errore: ${error.message}\n\nAssicurati che il backend sia attivo su ${BACKEND_URL}`);
+                alert(`❌ Error: ${error.message}\n\nMake sure the backend is running on ${BACKEND_URL}`);
             }
         });
 
@@ -686,7 +686,7 @@
                                     <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 15px;">${formattedDate}</p>
                                 </div>
                                 <div style="text-align: right;">
-                                    <p style="color: #6b7280; margin: 0; font-size: 13px;">Costo giornata</p>
+                                    <p style="color: #6b7280; margin: 0; font-size: 13px;">Daily cost</p>
                                     <p style="font-weight: bold; margin: 5px 0 0 0; color: #10b981; font-size: 20px;">€${day.daily_cost?.toFixed(2) || 'N/A'}</p>
                                 </div>
                             </div>
@@ -696,7 +696,7 @@
                                 <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-left: 5px solid #f59e0b; padding: 20px; margin-bottom: 25px; border-radius: 12px; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.2); position: relative;">
                                     ${day.morning_train.estimated ? `
                                         <div style="position: absolute; top: 10px; right: 10px; background: #f59e0b; color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: bold;">
-                                            STIMATO
+                                            ESTIMATED
                                         </div>
                                     ` : `
                                         <div style="position: absolute; top: 10px; right: 10px; background: #10b981; color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: bold;">
@@ -707,29 +707,29 @@
                                         <div style="font-size: 36px;">🚂</div>
                                         <div style="flex: 1;">
                                             <p style="margin: 0; font-weight: bold; color: #92400e; font-size: 16px;">${day.from_city} → ${day.city}</p>
-                                            ${day.morning_train.numero_treno && day.morning_train.numero_treno !== 'STIMATO' ? `
-                                                <p style="margin: 5px 0 0 0; color: #78350f; font-size: 13px;">Treno ${day.morning_train.numero_treno}${day.morning_train.changes > 0 ? ` • ${day.morning_train.changes} cambi` : ' • Diretto'}</p>
+                                            ${day.morning_train.numero_treno && day.morning_train.numero_treno !== 'ESTIMATED' ? `
+                                                <p style="margin: 5px 0 0 0; color: #78350f; font-size: 13px;">Train ${day.morning_train.numero_treno}${day.morning_train.changes > 0 ? ` • ${day.morning_train.changes} changes` : ' • Direct'}</p>
                                             ` : ''}
                                             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 10px;">
                                                 ${day.morning_train.departure ? `
                                                     <div>
-                                                        <span style="color: #78350f; font-size: 13px;">🕐 Partenza:</span>
+                                                        <span style="color: #78350f; font-size: 13px;">🕐 Departure:</span>
                                                         <span style="color: #92400e; font-weight: bold; margin-left: 5px;">${day.morning_train.departure}</span>
                                                     </div>
                                                 ` : ''}
                                                 ${day.morning_train.arrival ? `
                                                     <div>
-                                                        <span style="color: #78350f; font-size: 13px;">🕐 Arrivo:</span>
+                                                        <span style="color: #78350f; font-size: 13px;">🕐 Arrival:</span>
                                                         <span style="color: #92400e; font-weight: bold; margin-left: 5px;">${day.morning_train.arrival}</span>
                                                     </div>
                                                 ` : ''}
                                                 <div>
-                                                    <span style="color: #78350f; font-size: 13px;">⏱️ Durata:</span>
+                                                    <span style="color: #78350f; font-size: 13px;">⏱️ Duration:</span>
                                                     <span style="color: #92400e; font-weight: bold; margin-left: 5px;">${day.travel_time?.toFixed(1) || 'N/A'}h</span>
                                                 </div>
                                                 ${day.morning_train.price !== undefined ? `
                                                     <div>
-                                                        <span style="color: #78350f; font-size: 13px;">💰 Costo:</span>
+                                                        <span style="color: #78350f; font-size: 13px;">💰 Cost:</span>
                                                         <span style="color: #059669; font-weight: bold; margin-left: 5px;">€${day.morning_train.price.toFixed(2)}</span>
                                                     </div>
                                                 ` : ''}
@@ -737,7 +737,7 @@
                                             ${!day.morning_train.estimated ? `
                                                 <button onclick="showTrainModal(${JSON.stringify(day.morning_train).replace(/"/g, '&quot;')}, '${day.from_city}', '${day.city}')" 
                                                         style="margin-top: 15px; background: #667eea; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 500; font-size: 13px;">
-                                                    📋 Dettagli completi treno
+                                                    📋 Full train details
                                                 </button>
                                             ` : ''}
                                         </div>
@@ -750,7 +750,7 @@
                                 <div>
                                     <h3 style="color: #374151; margin: 0 0 20px 0; font-size: 18px; display: flex; align-items: center; gap: 10px;">
                                         <span style="font-size: 24px;">🎯</span>
-                                        <span>Attività del giorno (${day.pois.length})</span>
+                                        <span>Daily Activities (${day.pois.length})</span>
                                     </h3>
                                     <div style="display: grid; gap: 20px;">
                                         ${day.pois.map((poi, poiIndex) => `
@@ -760,7 +760,7 @@
                                                 </div>
                                                 <div style="padding-right: 40px;">
                                                     <h4 style="margin: 0 0 8px 0; color: #1f2937; font-size: 18px;">${poi.name}</h4>
-                                                    <p style="margin: 0 0 15px 0; color: #6b7280; font-size: 14px; font-style: italic;">${poi.type || 'Attrazione'}</p>
+                                                    <p style="margin: 0 0 15px 0; color: #6b7280; font-size: 14px; font-style: italic;">${poi.type || 'Attraction'}</p>
                                                     
                                                     <div style="display: flex; gap: 25px; flex-wrap: wrap; align-items: center;">
                                                         ${poi.duration_hours ? `
@@ -795,21 +795,21 @@
                                         `).join('')}
                                     </div>
                                 </div>
-                            ` : '<p style="color: #9ca3af; text-align: center; padding: 40px;">Nessuna attività pianificata per questo giorno.</p>'}
+                            ` : '<p style="color: #9ca3af; text-align: center; padding: 40px;">No activities planned for this day.</p>'}
                             
                             <!-- Footer card con riepilogo -->
                             <div style="margin-top: 25px; padding-top: 20px; border-top: 2px solid #e5e7eb; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 20px;">
                                 <div style="text-align: center; padding: 15px; background: #eff6ff; border-radius: 10px;">
-                                    <p style="color: #3b82f6; margin: 0; font-size: 13px; font-weight: 500;">⏰ ORE DISPONIBILI</p>
+                                    <p style="color: #3b82f6; margin: 0; font-size: 13px; font-weight: 500;">⏰ AVAILABLE HOURS</p>
                                     <p style="font-weight: bold; margin: 8px 0 0 0; font-size: 20px; color: #1e40af;">${day.available_hours?.toFixed(1) || 'N/A'}h</p>
                                 </div>
                                 <div style="text-align: center; padding: 15px; background: #f0fdf4; border-radius: 10px;">
-                                    <p style="color: #10b981; margin: 0; font-size: 13px; font-weight: 500;">🎯 ATTIVITÀ</p>
+                                    <p style="color: #10b981; margin: 0; font-size: 13px; font-weight: 500;">🎯 ACTIVITIES</p>
                                     <p style="font-weight: bold; margin: 8px 0 0 0; font-size: 20px; color: #065f46;">${day.pois?.length || 0}</p>
                                 </div>
                                 ${day.travel_time > 0 ? `
                                     <div style="text-align: center; padding: 15px; background: #fef3c7; border-radius: 10px;">
-                                        <p style="color: #f59e0b; margin: 0; font-size: 13px; font-weight: 500;">🚂 VIAGGIO</p>
+                                        <p style="color: #f59e0b; margin: 0; font-size: 13px; font-weight: 500;">🚂 TRAVEL</p>
                                         <p style="font-weight: bold; margin: 8px 0 0 0; font-size: 20px; color: #92400e;">${day.travel_time.toFixed(1)}h</p>
                                     </div>
                                 ` : ''}
@@ -824,7 +824,7 @@
                             <div style="display: flex; justify-content: center; margin: -15px 0 15px 0;">
                                 <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 10px 30px; border-radius: 20px; font-weight: bold; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);">
                                     <span style="font-size: 20px;">⬇️</span>
-                                    <span>Prossima tappa: ${nextDay.city}</span>
+                                    <span>Next stop: ${nextDay.city}</span>
                                     <span style="font-size: 20px;">⬇️</span>
                                 </div>
                             </div>
@@ -832,7 +832,7 @@
                     }
                 });
             } else {
-                html += '<p style="color: #6b7280; text-align: center; padding: 60px; font-size: 18px;">Nessun itinerario dettagliato disponibile.</p>';
+                html += '<p style="color: #6b7280; text-align: center; padding: 60px; font-size: 18px;">No detailed itinerary available.</p>';
             }
             
             document.getElementById('itineraryContent').innerHTML = html;
@@ -850,39 +850,39 @@
             let html = `
                 <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; margin-bottom: 25px; text-align: center;">
                     <h3 style="margin: 0 0 10px 0; font-size: 22px;">🚂 ${fromCity} → ${toCity}</h3>
-                    <p style="margin: 0; font-size: 15px; opacity: 0.9;">Treno suggerito da API Trenitalia</p>
+                    <p style="margin: 0; font-size: 15px; opacity: 0.9;">Train suggested by Trenitalia API</p>
                 </div>
                 
                 <div style="background: #f9fafb; border-radius: 12px; padding: 25px; margin-bottom: 20px;">
                     <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">
                         ${train.numero_treno && train.numero_treno !== 'N/A' ? `
                             <div>
-                                <p style="color: #6b7280; margin: 0; font-size: 13px;">NUMERO TRENO</p>
+                                <p style="color: #6b7280; margin: 0; font-size: 13px;">TRAIN NUMBER</p>
                                 <p style="margin: 5px 0 0 0; font-weight: bold; font-size: 18px; color: #1f2937;">${train.numero_treno}</p>
                             </div>
                         ` : ''}
                         ${train.changes !== undefined ? `
                             <div>
-                                <p style="color: #6b7280; margin: 0; font-size: 13px;">CAMBI</p>
+                                <p style="color: #6b7280; margin: 0; font-size: 13px;">CHANGES</p>
                                 <p style="margin: 5px 0 0 0; font-weight: bold; font-size: 18px; color: ${train.changes === 0 ? '#10b981' : '#f59e0b'};">
-                                    ${train.changes === 0 ? '✓ Diretto' : train.changes + ' cambi'}
+                                    ${train.changes === 0 ? '✓ Direct' : train.changes + ' changes'}
                                 </p>
                             </div>
                         ` : ''}
                         <div>
-                            <p style="color: #6b7280; margin: 0; font-size: 13px;">PARTENZA</p>
+                            <p style="color: #6b7280; margin: 0; font-size: 13px;">DEPARTURE</p>
                             <p style="margin: 5px 0 0 0; font-weight: bold; font-size: 18px; color: #1f2937;">${train.departure || 'N/A'}</p>
                         </div>
                         <div>
-                            <p style="color: #6b7280; margin: 0; font-size: 13px;">ARRIVO</p>
+                            <p style="color: #6b7280; margin: 0; font-size: 13px;">ARRIVAL</p>
                             <p style="margin: 5px 0 0 0; font-weight: bold; font-size: 18px; color: #1f2937;">${train.arrival || 'N/A'}</p>
                         </div>
                         <div>
-                            <p style="color: #6b7280; margin: 0; font-size: 13px;">DURATA</p>
+                            <p style="color: #6b7280; margin: 0; font-size: 13px;">DURATION</p>
                             <p style="margin: 5px 0 0 0; font-weight: bold; font-size: 18px; color: #667eea;">${train.travel_time?.toFixed(1) || 'N/A'}h</p>
                         </div>
                         <div>
-                            <p style="color: #6b7280; margin: 0; font-size: 13px;">COSTO STIMATO</p>
+                            <p style="color: #6b7280; margin: 0; font-size: 13px;">ESTIMATED COST</p>
                             <p style="margin: 5px 0 0 0; font-weight: bold; font-size: 18px; color: #10b981;">€${train.price?.toFixed(2) || 'N/A'}</p>
                         </div>
                     </div>
@@ -890,18 +890,18 @@
                 
                 <div style="background: #e0e7ff; border-left: 4px solid #667eea; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
                     <p style="margin: 0; color: #4338ca; font-size: 14px; line-height: 1.6;">
-                        <strong>ℹ️ Nota:</strong> I dati sono forniti dall'API ufficiale di Trenitalia (ViaggiaTreno). 
-                        Verifica sempre gli orari sul sito ufficiale prima della partenza.
+                        <strong>ℹ️ Note:</strong> Data provided by the official Trenitalia API (ViaggiaTreno). 
+                        Always verify schedules on the official website before departure.
                     </p>
                 </div>
                 
                 ${train.train && train.train.soluzione ? `
                     <div>
-                        <h4 style="color: #374151; margin: 0 0 15px 0;">🛤️ Dettaglio percorso</h4>
+                        <h4 style="color: #374151; margin: 0 0 15px 0;">🛤️ Route details</h4>
                         <div style="background: #f9fafb; border-radius: 12px; padding: 20px;">
                             ${train.train.soluzione.map((tratta, idx) => `
                                 <div style="margin-bottom: ${idx < train.train.soluzione.length - 1 ? '15px' : '0'}; padding-bottom: ${idx < train.train.soluzione.length - 1 ? '15px' : '0'}; border-bottom: ${idx < train.train.soluzione.length - 1 ? '1px dashed #d1d5db' : 'none'};">
-                                    <p style="margin: 0 0 5px 0; font-weight: bold; color: #1f2937;">Treno ${tratta.numeroTreno || 'N/A'}</p>
+                                    <p style="margin: 0 0 5px 0; font-weight: bold; color: #1f2937;">Train ${tratta.numeroTreno || 'N/A'}</p>
                                     <p style="margin: 0; color: #6b7280; font-size: 14px;">${tratta.origine || 'N/A'} → ${tratta.destinazione || 'N/A'}</p>
                                     <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 13px;">
                                         🕐 ${tratta.orarioPartenza || 'N/A'} - ${tratta.orarioArrivo || 'N/A'}

@@ -1,25 +1,25 @@
 # 🚂 Italian Train Trip Planner
 
-Sistema intelligente di pianificazione viaggi in treno per l'Italia, con integrazione API Trenitalia, OpenStreetMap e dati meteo.
+Intelligent train travel planning system for Italy, with Trenitalia API integration, OpenStreetMap, and weather data.
 
 ![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)
 ![Cities](https://img.shields.io/badge/cities-106-green.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
-## ✨ Caratteristiche
+## ✨ Features
 
-- **🗺️ Mappa Interattiva**: Selezione visuale di **106 province italiane** caricate dinamicamente da OpenStreetMap
-- **🧠 Smart Planning AI**: Suggerimenti intelligenti basati su interessi, meteo e collegamenti ferroviari
-- **🎯 Due Modalità**:
-  - **Solo Partenza**: Il sistema suggerisce automaticamente le destinazioni migliori
-  - **Partenza + Arrivo**: Pianificazione percorso ottimale tra due città specifiche
-- **📍 Itinerari Dettagliati**: Visualizzazione completa giorno per giorno con POI, costi e tempistiche
-- **🌤️ Integrazione Meteo**: Previsioni a 5 giorni per ottimizzare le attività
-- **🎨 POI Intelligenti**: Oltre 3000 attrazioni da OpenStreetMap categorizzate per interessi
-- **🚆 API Trenitalia**: Orari e collegamenti ferroviari reali
-- **💰 Stima Costi**: Calcolo automatico budget giornaliero e totale
+- **🗺️ Interactive Map**: Visual selection of **106 Italian provinces** dynamically loaded from OpenStreetMap
+- **🧠 Smart AI Planning**: Intelligent suggestions based on interests, weather, and train connections
+- **🎯 Two Modes**:
+  - **Departure Only**: System automatically suggests the best destinations
+  - **Departure + Arrival**: Optimal route planning between two specific cities
+- **📍 Detailed Itineraries**: Complete day-by-day view with POIs, costs, and timings
+- **🌤️ Weather Integration**: 5-day forecasts to optimize activities
+- **🎨 Smart POIs**: Over 3000 attractions from OpenStreetMap categorized by interests
+- **🚆 Trenitalia API**: Real train schedules and connections
+- **💰 Cost Estimation**: Automatic daily and total budget calculation
 
-## 🏗️ Architettura
+## 🏗️ Architecture
 
 ```
 SEProejct/
@@ -39,9 +39,9 @@ SEProejct/
     └── build_complete_database.py  # OSM data downloader
 ```
 
-## 🚀 Installazione e Avvio
+## 🚀 Installation and Setup
 
-### 1. Clone e Setup
+### 1. Clone and Setup
 
 ```bash
 git clone https://github.com/TommasoAiello08/SE_Proj-Train_Trip_Planner.git
@@ -50,29 +50,29 @@ python3 -m venv .venv
 pip install -r requirements.txt
 ```
 
-### 2. Avvio Sistema (Automatico) ⚡
+### 2. Start System (Automatic) ⚡
 
 ```bash
 source .venv/bin/activate  # macOS/Linux
-# oppure: .venv\Scripts\activate  # Windows
+# or: .venv\Scripts\activate  # Windows
 ./start.sh
 ```
 
-Lo script `start.sh` automaticamente:
-- 🔄 Termina processi precedenti sulle porte 5001 e 8080
-- 🚀 Avvia il backend Flask (porta 5001)
-- 🌐 Avvia il frontend HTTP server (porta 8080)
-- 🔗 Apre automaticamente il browser su **http://localhost:8080/map_planner.html**
-- 📝 Log disponibili in `/tmp/backend.log` e `/tmp/frontend.log`
+The `start.sh` script automatically:
+- 🔄 Terminates previous processes on ports 5001 and 8080
+- 🚀 Starts Flask backend (port 5001)
+- 🌐 Starts frontend HTTP server (port 8080)
+- 🔗 Automatically opens browser at **http://localhost:8080/map_planner.html**
+- 📝 Logs available in `/tmp/backend.log` and `/tmp/frontend.log`
 
-**Per fermare i server:**
+**To stop the servers:**
 ```bash
 ./stop.sh
 ```
 
-### 3. Avvio Manuale (Opzionale)
+### 3. Manual Start (Optional)
 
-Se preferisci avviare manualmente (2 terminali):
+If you prefer to start manually (2 terminals):
 
 **Terminal 1 - Backend:**
 ```bash
@@ -86,81 +86,81 @@ cd frontend
 python3 -m http.server 8080
 ```
 
-Apri nel browser: **http://localhost:8080/map_planner.html**
+Open in browser: **http://localhost:8080/map_planner.html**
 
-## 🎮 Come Usare
+## 🎮 How to Use
 
-### Modalità "Solo Partenza" 🧠
-1. Clicca **"🧠 Solo Partenza"** (modalità predefinita)
-2. Clicca una città sulla mappa (diventa **verde**)
-3. Seleziona data di partenza e durata (1-5 giorni)
-4. Scegli interessi (opzionale): arte, storia, natura, cibo, mare, montagna
-5. Clicca **"🔍 Pianifica Viaggio"**
-6. Visualizza l'itinerario dettagliato sotto la mappa
+### "Departure Only" Mode 🧠
+1. Click **"🧠 Departure Only"** (default mode)
+2. Click a city on the map (turns **green**)
+3. Select departure date and duration (1-5 days)
+4. Choose interests (optional): art, history, nature, food, sea, mountain
+5. Click **"🔍 Plan Trip"**
+6. View detailed itinerary below the map
 
-### Modalità "Partenza + Arrivo" 🎯
-1. Clicca **"🎯 Partenza + Arrivo"**
-2. Clicca città di partenza (**verde**) poi città di arrivo (**rossa**)
-3. Imposta parametri e clicca **"🔍 Pianifica Viaggio"**
-4. Il sistema pianifica il percorso ottimale tra le due città
+### "Departure + Arrival" Mode 🎯
+1. Click **"🎯 Departure + Arrival"**
+2. Click departure city (**green**) then arrival city (**red**)
+3. Set parameters and click **"🔍 Plan Trip"**
+4. System plans optimal route between the two cities
 
-### Risultato Itinerario
+### Itinerary Result
 
-L'itinerario mostra per ogni giorno:
-- 🏙️ **Città e data**
-- 🚂 **Viaggio in treno** (durata e orari stimati)
-- 🎯 **Attività del giorno** con:
-  - Nome e tipo attrazione
-  - ⏱️ Durata visita
-  - 💰 Costo ingresso
-  - ⭐ Rating qualità
-- 📊 **Riepilogo giornaliero**: ore disponibili e costo totale
+The itinerary shows for each day:
+- 🏙️ **City and date**
+- 🚂 **Train journey** (duration and estimated times)
+- 🎯 **Daily activities** with:
+  - Attraction name and type
+  - ⏱️ Visit duration
+  - 💰 Entrance cost
+  - ⭐ Quality rating
+- 📊 **Daily summary**: available hours and total cost
 
 ## 🔧 Troubleshooting
 
-### ❌ Errore: "Failed to fetch" o CORS errors
+### ❌ Error: "Failed to fetch" or CORS errors
 
-**Soluzione Rapida:**
+**Quick Solution:**
 ```bash
 ./stop.sh && ./start.sh
 ```
 
-**Causa**: Frontend non servito via HTTP o backend spento
+**Cause**: Frontend not served via HTTP or backend stopped
 
-**Soluzione Manuale**:
-1. Verifica che **entrambi i server** siano attivi:
-   - **Backend**: porta 5001
-   - **Frontend**: porta 8080
-2. Accedi a: **http://localhost:8080/map_planner.html** (non file://)
-3. Controlla i log: `/tmp/backend.log` e `/tmp/frontend.log`
-4. Ricarica pagina browser (F5)
+**Manual Solution**:
+1. Verify **both servers** are running:
+   - **Backend**: port 5001
+   - **Frontend**: port 8080
+2. Access: **http://localhost:8080/map_planner.html** (not file://)
+3. Check logs: `/tmp/backend.log` and `/tmp/frontend.log`
+4. Reload browser page (F5)
 
-**⚠️ Importante**: NON aprire il file HTML direttamente con doppio click. Usa sempre `./start.sh` per avviare il sistema.
+**⚠️ Important**: DO NOT open the HTML file directly with double-click. Always use `./start.sh` to start the system.
 
-### Se la porta 5001 o 8080 è occupata
+### If port 5001 or 8080 is busy
 
 ```bash
-./stop.sh  # Termina automaticamente processi sulle porte 5001 e 8080
-./start.sh # Riavvia il sistema
+./stop.sh  # Automatically terminates processes on ports 5001 and 8080
+./start.sh # Restart system
 ```
 
-**Verifica manuale:**
+**Manual check:**
 ```bash
 lsof -i :5001  # Backend
 lsof -i :8080  # Frontend
 ```
 
-### Mappa non carica le 106 città
+### Map doesn't load 106 cities
 
-1. Verifica backend logs: deve mostrare `✅ Database loaded: 106 cities`
-2. Controlla browser console (F12) per errori API
-3. Test manuale endpoint: `curl http://localhost:5001/api/cities`
-4. Se vedi meno di 106 città, rigenera database:
+1. Check backend logs: must show `✅ Database loaded: 106 cities`
+2. Check browser console (F12) for API errors
+3. Manual endpoint test: `curl http://localhost:5001/api/cities`
+4. If you see fewer than 106 cities, regenerate database:
    ```bash
    python scripts/build_complete_database.py
    ```
 
-### Errori di dipendenze
+### Dependency errors
 
 ```bash
 source .venv/bin/activate
@@ -196,29 +196,29 @@ SEProejct/
     └── SINTESI_ANALISI.md
 ```
 
-## 🛠️ Scripts Utili
+## 🛠️ Useful Scripts
 
-### Avvio/Arresto Sistema
+### Start/Stop System
 ```bash
 source .venv/bin/activate
-./start.sh  # Avvia backend + frontend + apre browser
-./stop.sh   # Ferma tutti i server
+./start.sh  # Start backend + frontend + open browser
+./stop.sh   # Stop all servers
 ```
 
-### Rigenera Database da OSM
+### Regenerate Database from OSM
 ```bash
 python scripts/build_complete_database.py
-# Download 107 province italiane con ~30 POI ciascuna
-# Tempo: ~5-6 minuti con retry automatico
+# Downloads 107 Italian provinces with ~30 POIs each
+# Time: ~5-6 minutes with automatic retry
 ```
 
-### Verifica Salute Sistema
+### Verify System Health
 ```bash
 curl http://localhost:5001/api/health
 # Output: {"message":"OK","status":"healthy"}
 
 curl http://localhost:5001/api/cities | python -m json.tool | head -20
-# Verifica città caricate
+# Verify loaded cities
 ```
 
 ## 👥 Contributors
@@ -248,22 +248,22 @@ source .venv/bin/activate && ./start.sh
   "end_city": "Napoli",
   "start_date": "2026-01-10",
   "duration": 3,
-  "interests": ["arte", "storia"]
+  "interests": ["art", "history"]
 }
 ```
 
-## 📊 Algoritmi
+## 📊 Algorithms
 
-- **Dijkstra**: Percorso ottimale tra città
-- **Knapsack**: Selezione POI giornalieri
-- **Greedy**: Scoring attrazioni
-- **Haversine**: Calcolo distanze
+- **Dijkstra**: Optimal path between cities
+- **Knapsack**: Daily POI selection
+- **Greedy**: Attraction scoring
+- **Haversine**: Distance calculation
 
-## 🔑 API Utilizzate
+## 🔑 APIs Used
 
-- **Trenitalia ViaggiaTreno**: Orari treni (pubblica)
-- **OpenStreetMap**: Geocoding e POI
-- **OpenWeatherMap**: Previsioni meteo
+- **Trenitalia ViaggiaTreno**: Train schedules (public)
+- **OpenStreetMap**: Geocoding and POIs
+- **OpenWeatherMap**: Weather forecasts
 
 ## 📝 License
 
@@ -271,4 +271,4 @@ MIT License
 
 ---
 
-**Buon viaggio! 🚂🇮🇹**
+**Happy travels! 🚂🇮🇹**
