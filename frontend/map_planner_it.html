@@ -218,25 +218,25 @@
 <body>
     <div class="container">
         <div class="sidebar">
-            <h1>🗺️ Train Planner</h1>
-            <p class="subtitle">Select cities on the map</p>
+            <h1>🗺️ Pianificatore Treni</h1>
+            <p class="subtitle">Seleziona le città sulla mappa</p>
 
             <div class="mode-toggle">
                 <button class="mode-btn active" data-mode="smart_open">
-                    🧠 Departure Only
+                    🧠 Solo Partenza
                 </button>
                 <button class="mode-btn" data-mode="smart_fixed">
-                    🎯 Departure + Arrival
+                    🎯 Partenza + Arrivo
                 </button>
             </div>
 
             <div class="instructions" id="instructions">
-                📍 Click a city on the map to select the departure
+                📍 Clicca su una città sulla mappa per selezionare la partenza
             </div>
 
             <div class="selection-display">
                 <div id="selectionInfo">
-                    <small style="color: #6b7280;">No selection</small>
+                    <small style="color: #6b7280;">Nessuna selezione</small>
                 </div>
             </div>
 
@@ -506,10 +506,10 @@
             if (show) {
                 // Reset progress
                 document.getElementById('progressBar').style.width = '0%';
-                document.getElementById('step1').innerHTML = '⏳ Selecting candidate provinces...';
-                document.getElementById('step2').innerHTML = '⏳ Searching available trains...';
-                document.getElementById('step3').innerHTML = '⏳ Optimizing route...';
-                document.getElementById('step4').innerHTML = '⏳ Selecting attractions...';
+                document.getElementById('step1').innerHTML = '⏳ Selezione province candidate...';
+                document.getElementById('step2').innerHTML = '⏳ Ricerca treni disponibili...';
+                document.getElementById('step3').innerHTML = '⏳ Ottimizzazione percorso...';
+                document.getElementById('step4').innerHTML = '⏳ Selezione attrazioni...';
                 
                 // Reset step styles
                 ['step1', 'step2', 'step3', 'step4'].forEach(id => {
@@ -520,7 +520,7 @@
                 // Mostra stima tempo
                 const minutes = Math.ceil(estimatedSeconds / 60);
                 document.getElementById('timeEstimate').textContent = 
-                    `⏱️ Estimated time: ${minutes} minut${minutes > 1 ? 'i' : 'o'} (~${Math.round(estimatedSeconds)}s)`;
+                    `⏱️ Tempo stimato: ${minutes} minut${minutes > 1 ? 'i' : 'o'} (~${Math.round(estimatedSeconds)}s)`;
                 
                 // Simula progress con steps
                 let progress = 0;
@@ -532,22 +532,22 @@
                         
                         // Aggiorna steps con animazione
                         if (progress > 10 && document.getElementById('step1').textContent.includes('⏳')) {
-                            document.getElementById('step1').innerHTML = '✅ Candidate provinces selected';
+                            document.getElementById('step1').innerHTML = '✅ Selezione province candidate';
                             document.getElementById('step1').style.background = '#d1fae5';
                             document.getElementById('step1').style.color = '#065f46';
                         }
                         if (progress > 40 && document.getElementById('step2').textContent.includes('⏳')) {
-                            document.getElementById('step2').innerHTML = '✅ Available trains found';
+                            document.getElementById('step2').innerHTML = '✅ Ricerca treni disponibili';
                             document.getElementById('step2').style.background = '#d1fae5';
                             document.getElementById('step2').style.color = '#065f46';
                         }
                         if (progress > 70 && document.getElementById('step3').textContent.includes('⏳')) {
-                            document.getElementById('step3').innerHTML = '✅ Route optimized';
+                            document.getElementById('step3').innerHTML = '✅ Ottimizzazione percorso';
                             document.getElementById('step3').style.background = '#d1fae5';
                             document.getElementById('step3').style.color = '#065f46';
                         }
                         if (progress > 85 && document.getElementById('step4').textContent.includes('⏳')) {
-                            document.getElementById('step4').innerHTML = '⏳ Selecting attractions... (quasi fatto)';
+                            document.getElementById('step4').innerHTML = '⏳ Selezione attrazioni... (quasi fatto)';
                         }
                     }
                 }, 500);
@@ -561,7 +561,7 @@
                 }
                 // Completa progress
                 document.getElementById('progressBar').style.width = '100%';
-                document.getElementById('step4').innerHTML = '✅ Attractions selected';
+                document.getElementById('step4').innerHTML = '✅ Selezione attrazioni';
                 document.getElementById('step4').style.background = '#d1fae5';
                 document.getElementById('step4').style.color = '#065f46';
             }
@@ -598,7 +598,7 @@
                 if (estimateResponse.ok) {
                     const estimate = await estimateResponse.json();
                     estimatedSeconds = estimate.estimated_seconds || 30;
-                    console.log('⏱️ Estimated time:', estimatedSeconds, 's', '(', estimate.num_api_calls, 'API calls )');
+                    console.log('⏱️ Tempo stimato:', estimatedSeconds, 's', '(', estimate.num_api_calls, 'API calls )');
                 }
             } catch (e) {
                 console.warn('⚠️ Could not get time estimate:', e);
@@ -644,18 +644,18 @@
             // Build itinerary HTML
             let html = `
                 <div style="background: white; border-radius: 12px; padding: 30px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px;">
-                    <h3 style="color: #667eea; margin-top: 0;">📋 Summary</h3>
+                    <h3 style="color: #667eea; margin-top: 0;">📋 Riepilogo</h3>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-top: 20px;">
                         <div>
-                            <p style="color: #6b7280; margin: 0; font-size: 14px;">Route</p>
+                            <p style="color: #6b7280; margin: 0; font-size: 14px;">Percorso</p>
                             <p style="font-weight: bold; margin: 5px 0;">${data.route.join(' → ')}</p>
                         </div>
                         <div>
-                            <p style="color: #6b7280; margin: 0; font-size: 14px;">Duration</p>
-                            <p style="font-weight: bold; margin: 5px 0;">${data.total_days || data.route.length} days</p>
+                            <p style="color: #6b7280; margin: 0; font-size: 14px;">Durata</p>
+                            <p style="font-weight: bold; margin: 5px 0;">${data.total_days || data.route.length} giorni</p>
                         </div>
                         <div>
-                            <p style="color: #6b7280; margin: 0; font-size: 14px;">Estimated Cost</p>
+                            <p style="color: #6b7280; margin: 0; font-size: 14px;">Costo Stimato</p>
                             <p style="font-weight: bold; margin: 5px 0; color: #10b981;">€${data.total_cost?.toFixed(2) || 'N/A'}</p>
                         </div>
                     </div>
@@ -666,7 +666,7 @@
             if (data.itinerary && Array.isArray(data.itinerary)) {
                 data.itinerary.forEach((day, index) => {
                     const dayDate = new Date(day.date);
-                    const formattedDate = dayDate.toLocaleDateString('en-US', { 
+                    const formattedDate = dayDate.toLocaleDateString('it-IT', { 
                         weekday: 'long', 
                         year: 'numeric', 
                         month: 'long', 
@@ -817,7 +817,7 @@
                         </div>
                     `;
                     
-                    // Freccia tra days (tranne l'ultimo)
+                    // Freccia tra giorni (tranne l'ultimo)
                     if (index < data.itinerary.length - 1) {
                         const nextDay = data.itinerary[index + 1];
                         html += `
