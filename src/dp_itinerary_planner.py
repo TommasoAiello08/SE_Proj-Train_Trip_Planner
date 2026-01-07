@@ -692,20 +692,33 @@ class DPItineraryPlanner:
                                 morning_train = train_info
                                 print(f"    🚂 Treno: {prev_city} → {city}, {travel_time:.1f}h")
                 
-                # Ore disponibili
-                available_hours = self.HOURS_PER_DAY - travel_time - 2.0  # -2h per pasti
+                # Running clock: giornata inizia alle 8:00 (ora 8)
+                running_clock = 8.0
                 
-                # Knapsack: seleziona attrazioni ottimali (escludendo quelle già usate)
-                pois = self._knapsack_attractions(
+                # Aggiungi tempo viaggio treno
+                running_clock += travel_time
+                
+                # Limite orario: 21:00 (ora 21)
+                max_clock = 21.0
+                
+                # Knapsack: seleziona attrazioni con running clock
+                pois = self._knapsack_attractions_with_clock(
                     city,
                     interests,
-                    available_hours,
+                    running_clock,
+                    max_clock,
                     exclude_names=used_attractions[city]
                 )
+                
+                # Calcola ore disponibili totali per backward compatibility
+                available_hours = max_clock - running_clock
                 
                 # Aggiungi le attrazioni selezionate alla lista used
                 for poi in pois:
                     used_attractions[city].add(poi['name'])
+                
+                # Calcola running clock finale (dopo POI)
+                final_clock = running_clock + (len(pois) * 3.0)
                 
                 # Costo giornata
                 daily_cost = self._estimate_daily_cost(city, pois, travel_time, morning_train)
@@ -725,7 +738,19 @@ class DPItineraryPlanner:
                 
                 schedule.append(day_schedule)
                 
-                print(f"    Giorno {day_counter}: {len(pois)} POI, €{daily_cost:.2f}")
+                print(f"    Giorno {day_counter}: {len(pois)} POI, €{daily_cost:.2f} (clock: {final_clock:.1f}h/{max_clock:.0f}h)")
+                
+                # Verifica se clock supera limite (21:00)
+                if final_clock > max_clock:
+                    print(f"    ⚠️  Clock limit reached ({final_clock:.1f}h > {max_clock:.0f}h) - day ended")
+                
+                # Solo se è l'ULTIMO giorno in questa città, cerchiamo treno per la prossima
+                # (evita bug quando ci fermiamo più giorni nella stessa città)
+                is_last_day_in_city = (day_in_city == num_days - 1)
+                if is_last_day_in_city:
+                    # Questo è l'ultimo giorno in questa città, possiamo cercare treni per domani
+                    # Il train_matrix verrà consultato nel prossimo ciclo (prossima città)
+                    pass
                 
                 current_date += timedelta(days=1)
                 day_counter += 1
@@ -733,6 +758,82 @@ class DPItineraryPlanner:
             prev_city = city
         
         return schedule
+    
+    def _knapsack_attractions_with_clock(
+        self,
+        city: str,
+        interests: List[str],
+        running_clock: float,
+        max_clock: float,
+        exclude_names: set = None
+    ) -> List[Dict]:
+        """
+        Knapsack con running clock: ogni POI dura 3h, limita a ora 21:00
+        
+        running_clock: ora corrente (es. 8.0 per le 8:00, + tempo treno)
+        max_clock: ora limite (21.0 = 21:00)
+        exclude_names: set di nomi attrazioni da escludere
+        """
+        POI_DURATION = 3.0  # Ogni attività dura 3 ore
+        
+        if exclude_names is None:
+            exclude_names = set()
+            
+        city_data = self.city_db.get_city_by_name(city)
+        if not city_data:
+            return []
+        
+        attractions = city_data.get('attractions', [])
+        if not attractions:
+            return []
+        
+        # Filtra attrazioni già usate
+        attractions = [a for a in attractions if a['name'] not in exclude_names]
+        
+        if not attractions:
+            return []
+        
+        # Score per attrazione
+        scored = []
+        for attr in attractions:
+            # Match interessi
+            match_score = sum(1 for cat in attr.get('categories', []) if cat in interests)
+            
+            # Score composito
+            score = (
+                match_score * 10 +
+                attr.get('rating', 5) * 2 +
+                attr.get('popularity', 5) * 1 -
+                attr.get('cost_euro', 0) * 0.1
+            )
+            
+            scored.append({
+                **attr,
+                'score': score,
+                'duration_hours': POI_DURATION  # Forza 3h per ogni POI
+            })
+        
+        # Ordina per score decrescente
+        scored.sort(key=lambda x: x['score'], reverse=True)
+        
+        # Seleziona POI con running clock
+        selected = []
+        current_clock = running_clock
+        
+        for attr in scored:
+            # Verifica se c'è spazio per questa attività (non superare ore 21:00)
+            if current_clock + POI_DURATION <= max_clock:
+                selected.append(attr)
+                current_clock += POI_DURATION
+                
+                # Max 3 attrazioni/giorno
+                if len(selected) >= 3:
+                    break
+        
+        # Differenzia tra 2 e 3 POI: accetta anche 2 se non c'è spazio per la terza
+        # (il loop sopra già gestisce questo)
+        
+        return selected
     
     def _knapsack_attractions(
         self,
@@ -742,7 +843,7 @@ class DPItineraryPlanner:
         exclude_names: set = None
     ) -> List[Dict]:
         """
-        Knapsack 0/1 per selezione attrazioni ottimale
+        Knapsack 0/1 per selezione attrazioni ottimale (legacy)
         
         Obiettivo: massimizzare score sotto vincolo tempo
         exclude_names: set di nomi attrazioni da escludere (già usate in giorni precedenti)
@@ -813,21 +914,16 @@ class DPItineraryPlanner:
         morning_train: Optional[Dict]
     ) -> float:
         """
-        Stima costo giornaliero: attrazioni + treno + pasti + alloggio
+        Stima costo giornaliero: SOLO attrazioni + treno
+        (rimossi pasti e alloggio per accuratezza)
         """
-        # Attrazioni
+        # Costo attrazioni (dalle 2-3 POI selezionate)
         attr_cost = sum(poi.get('cost_euro', poi.get('cost', 0)) for poi in pois)
         
-        # Treno
+        # Costo treno (se presente)
         train_cost = morning_train.get('price', 0) if morning_train else 0
         
-        # Pasti (stima)
-        meal_cost = 30.0
-        
-        # Alloggio (solo se non è giorno di viaggio)
-        accommodation_cost = 50.0 if travel_time < 4.0 else 0
-        
-        return attr_cost + train_cost + meal_cost + accommodation_cost
+        return attr_cost + train_cost
 
 
 def demo_dp_planner():

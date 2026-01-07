@@ -305,7 +305,6 @@
     <div id="itinerarySection" style="display: none;">
         <div style="max-width: 1200px; margin: 0 auto; padding: 20px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
-                <h2 style="color: #667eea; margin: 0;">📍 Your Itinerary</h2>
                 <button onclick="goBackToMap()" class="btn-secondary">🔙 Back to Map</button>
             </div>
             
@@ -353,6 +352,8 @@
         
         let map;
         let markers = {};
+        let provincesData = [];  // Store all cities with coordinates
+        let routePolyline = null;  // Store the route line
         let currentMode = 'smart_open';  // or 'smart_fixed'
         let selectedStart = null;
         let selectedEnd = null;
@@ -378,6 +379,7 @@
                 }
                 
                 const provinces = await response.json();
+                provincesData = provinces;  // Store globally for route drawing
                 
                 console.log(`Loaded ${provinces.length} cities from backend`);
                 
@@ -635,8 +637,76 @@
             }
         });
 
+        // Draw route on map
+        function drawRouteOnMap(routeCities) {
+            // Remove existing route if any
+            if (routePolyline) {
+                map.removeLayer(routePolyline);
+                routePolyline = null;
+            }
+            
+            // Get coordinates for each city in the route
+            const routeCoordinates = [];
+            routeCities.forEach(cityName => {
+                const cityData = provincesData.find(p => p.name === cityName);
+                if (cityData) {
+                    routeCoordinates.push([cityData.lat, cityData.lon]);
+                }
+            });
+            
+            // Draw dotted red line connecting cities
+            if (routeCoordinates.length > 1) {
+                routePolyline = L.polyline(routeCoordinates, {
+                    color: '#ef4444',        // Red color
+                    weight: 4,               // Line thickness
+                    opacity: 0.8,            // Transparency
+                    dashArray: '10, 10',     // Dotted pattern (10px dash, 10px gap)
+                    lineJoin: 'round',       // Smooth corners
+                    lineCap: 'round'         // Rounded ends
+                }).addTo(map);
+                
+                // Add arrows to show direction
+                const decorator = L.polylineDecorator(routePolyline, {
+                    patterns: [
+                        {
+                            offset: '50%',
+                            repeat: 100,
+                            symbol: L.Symbol.arrowHead({
+                                pixelSize: 12,
+                                pathOptions: {
+                                    fillOpacity: 1,
+                                    weight: 0,
+                                    color: '#ef4444'
+                                }
+                            })
+                        }
+                    ]
+                });
+                
+                // Only add decorator if the library is available
+                try {
+                    decorator.addTo(map);
+                } catch (e) {
+                    console.log('Polyline decorator not available, showing simple route line');
+                }
+                
+                // Fit map to show entire route
+                map.fitBounds(routePolyline.getBounds(), {
+                    padding: [50, 50],
+                    maxZoom: 8
+                });
+                
+                console.log(`✅ Drew route on map: ${routeCities.join(' → ')}`);
+            }
+        }
+        
         // Display itinerary function
         function displayItinerary(data) {
+            // Draw the route on the map
+            if (data.route && data.route.length > 0) {
+                drawRouteOnMap(data.route);
+            }
+            
             // Keep map visible, just scroll down to itinerary
             const itinerarySection = document.getElementById('itinerarySection');
             itinerarySection.style.display = 'block';
@@ -691,56 +761,71 @@
                                 </div>
                             </div>
                             
-                            <!-- Treno (se presente) -->
+                            <!-- 🌅 MORNING: Treno (se presente) - INIZIO GIORNATA -->
                             ${day.morning_train && day.from_city ? `
-                                <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-left: 5px solid #f59e0b; padding: 20px; margin-bottom: 25px; border-radius: 12px; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.2); position: relative;">
-                                    ${day.morning_train.estimated ? `
-                                        <div style="position: absolute; top: 10px; right: 10px; background: #f59e0b; color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: bold;">
-                                            ESTIMATED
+                                <div style="margin-bottom: 25px;">
+                                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                                        <div style="background: #fef3c7; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; color: #92400e;">
+                                            🌅 START OF DAY - MORNING TRAIN
                                         </div>
-                                    ` : `
-                                        <div style="position: absolute; top: 10px; right: 10px; background: #10b981; color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: bold;">
-                                            ✓ API TRENITALIA
-                                        </div>
-                                    `}
-                                    <div style="display: flex; align-items: center; gap: 15px;">
-                                        <div style="font-size: 36px;">🚂</div>
-                                        <div style="flex: 1;">
-                                            <p style="margin: 0; font-weight: bold; color: #92400e; font-size: 16px;">${day.from_city} → ${day.city}</p>
-                                            ${day.morning_train.numero_treno && day.morning_train.numero_treno !== 'ESTIMATED' ? `
-                                                <p style="margin: 5px 0 0 0; color: #78350f; font-size: 13px;">Train ${day.morning_train.numero_treno}${day.morning_train.changes > 0 ? ` • ${day.morning_train.changes} changes` : ' • Direct'}</p>
-                                            ` : ''}
-                                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 10px;">
-                                                ${day.morning_train.departure ? `
-                                                    <div>
-                                                        <span style="color: #78350f; font-size: 13px;">🕐 Departure:</span>
-                                                        <span style="color: #92400e; font-weight: bold; margin-left: 5px;">${day.morning_train.departure}</span>
-                                                    </div>
+                                    </div>
+                                    <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-left: 5px solid #f59e0b; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.2); position: relative;">
+                                        ${day.morning_train.estimated ? `
+                                            <div style="position: absolute; top: 10px; right: 10px; background: #f59e0b; color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: bold;">
+                                                ESTIMATED
+                                            </div>
+                                        ` : `
+                                            <div style="position: absolute; top: 10px; right: 10px; background: #10b981; color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: bold;">
+                                                ✓ API TRENITALIA
+                                            </div>
+                                        `}
+                                        <div style="display: flex; align-items: center; gap: 15px;">
+                                            <div style="font-size: 36px;">🚂</div>
+                                            <div style="flex: 1;">
+                                                <p style="margin: 0; font-weight: bold; color: #92400e; font-size: 16px;">${day.from_city} → ${day.city}</p>
+                                                ${day.morning_train.numero_treno && day.morning_train.numero_treno !== 'ESTIMATED' ? `
+                                                    <p style="margin: 5px 0 0 0; color: #78350f; font-size: 13px;">Train ${day.morning_train.numero_treno}${day.morning_train.changes > 0 ? ` • ${day.morning_train.changes} changes` : ' • Direct'}</p>
                                                 ` : ''}
-                                                ${day.morning_train.arrival ? `
+                                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 10px;">
+                                                    ${day.morning_train.departure ? `
+                                                        <div>
+                                                            <span style="color: #78350f; font-size: 13px;">🕐 Departure:</span>
+                                                            <span style="color: #92400e; font-weight: bold; margin-left: 5px;">${day.morning_train.departure}</span>
+                                                        </div>
+                                                    ` : ''}
+                                                    ${day.morning_train.arrival ? `
+                                                        <div>
+                                                            <span style="color: #78350f; font-size: 13px;">🕐 Arrival:</span>
+                                                            <span style="color: #92400e; font-weight: bold; margin-left: 5px;">${day.morning_train.arrival}</span>
+                                                        </div>
+                                                    ` : ''}
                                                     <div>
-                                                        <span style="color: #78350f; font-size: 13px;">🕐 Arrival:</span>
-                                                        <span style="color: #92400e; font-weight: bold; margin-left: 5px;">${day.morning_train.arrival}</span>
+                                                        <span style="color: #78350f; font-size: 13px;">⏱️ Duration:</span>
+                                                        <span style="color: #92400e; font-weight: bold; margin-left: 5px;">${day.travel_time?.toFixed(1) || 'N/A'}h</span>
                                                     </div>
-                                                ` : ''}
-                                                <div>
-                                                    <span style="color: #78350f; font-size: 13px;">⏱️ Duration:</span>
-                                                    <span style="color: #92400e; font-weight: bold; margin-left: 5px;">${day.travel_time?.toFixed(1) || 'N/A'}h</span>
+                                                    ${day.morning_train.price !== undefined ? `
+                                                        <div>
+                                                            <span style="color: #78350f; font-size: 13px;">💰 Cost:</span>
+                                                            <span style="color: #059669; font-weight: bold; margin-left: 5px;">€${day.morning_train.price.toFixed(2)}</span>
+                                                        </div>
+                                                    ` : ''}
                                                 </div>
-                                                ${day.morning_train.price !== undefined ? `
-                                                    <div>
-                                                        <span style="color: #78350f; font-size: 13px;">💰 Cost:</span>
-                                                        <span style="color: #059669; font-weight: bold; margin-left: 5px;">€${day.morning_train.price.toFixed(2)}</span>
-                                                    </div>
+                                                ${!day.morning_train.estimated ? `
+                                                    <button onclick="showTrainModal(${JSON.stringify(day.morning_train).replace(/"/g, '&quot;')}, '${day.from_city}', '${day.city}')" 
+                                                            style="margin-top: 15px; background: #667eea; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 500; font-size: 13px;">
+                                                        📋 Full train details
+                                                    </button>
                                                 ` : ''}
                                             </div>
-                                            ${!day.morning_train.estimated ? `
-                                                <button onclick="showTrainModal(${JSON.stringify(day.morning_train).replace(/"/g, '&quot;')}, '${day.from_city}', '${day.city}')" 
-                                                        style="margin-top: 15px; background: #667eea; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 500; font-size: 13px;">
-                                                    📋 Full train details
-                                                </button>
-                                            ` : ''}
                                         </div>
+                                    </div>
+                                </div>
+                            ` : day.from_city ? `
+                                <div style="margin-bottom: 25px;">
+                                    <div style="background: #e0f2fe; border-left: 4px solid #0284c7; padding: 15px; border-radius: 8px;">
+                                        <p style="margin: 0; color: #075985; font-size: 14px;">
+                                            🏨 <strong>Staying in ${day.city}</strong> (no travel today - continuing from yesterday)
+                                        </p>
                                     </div>
                                 </div>
                             ` : ''}
@@ -923,6 +1008,12 @@
         }
 
         function goBackToMap() {
+            // Remove route line from map
+            if (routePolyline) {
+                map.removeLayer(routePolyline);
+                routePolyline = null;
+            }
+            
             // Scroll back to top
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
