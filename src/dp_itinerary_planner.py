@@ -78,11 +78,11 @@ class DPItineraryPlanner:
         
         # Parametri configurabili  
         self.HOURS_PER_DAY = 13  # Ore disponibili per giorno (8:00-21:00)
-        self.MIN_STAY_HOURS = 3  # Minimo 3 ore per provincia
-        self.MAX_TRAIN_HOURS_PER_DAY = 10  # Max ore di treno al giorno
+        self.MIN_STAY_HOURS = 2  # Reduced from 3 - più flessibilità per viaggi lunghi
+        self.MAX_TRAIN_HOURS_PER_DAY = 12  # Increased from 10 - permette tratte più lunghe
         self.MAX_DAYS_PER_CITY = 2  # Max giorni consecutivi per città
-        self.MAX_CANDIDATES = 30  # Reduced for performance (30×8=240 per day vs 50×12=600)
-        self.MAX_CONNECTIONS_PER_CITY = 8  # Reduced for performance
+        self.MAX_CANDIDATES = 35  # Increased from 30 - more cities for long routes
+        self.MAX_CONNECTIONS_PER_CITY = 12  # Increased from 8 - explore more routes to reach distant cities
         self.TRAIN_BUFFER_HOURS = 1.0  # Buffer per accesso stazione
         
         # Cache
@@ -174,7 +174,8 @@ class DPItineraryPlanner:
         train_matrix = self._build_train_matrix(
             candidates,
             trip_input.start_date,
-            trip_input.days
+            trip_input.days,
+            trip_input.end_city  # Pass end city to ensure it's always reachable
         )
         
         # Step 3: DP per sequenza ottimale
@@ -356,7 +357,8 @@ class DPItineraryPlanner:
         self,
         origin: str,
         candidates: List[str],
-        max_dests: int
+        max_dests: int,
+        force_include: List[str] = None
     ) -> List[str]:
         """
         Seleziona le destinazioni più rilevanti per una città origine
@@ -365,10 +367,13 @@ class DPItineraryPlanner:
         Criteri:
         - Distanza geografica (preferenza vicini)
         - Score provincia (preferenza più interessanti)
+        - force_include: città da includere sempre (es. destinazione finale)
         """
         origin_data = self.city_db.get_city_by_name(origin)
         if not origin_data:
             return candidates[:max_dests]
+        
+        force_include = force_include or []
         
         origin_lat = origin_data['coordinates']['lat']
         origin_lon = origin_data['coordinates']['lon']
@@ -404,13 +409,31 @@ class DPItineraryPlanner:
         
         # Ordina e prendi top-N
         scored_dests.sort(key=lambda x: x[1], reverse=True)
-        return [dest for dest, _ in scored_dests[:max_dests]]
+        
+        # CRITICAL FIX: Ensure force_include cities are ALWAYS included first
+        # This guarantees that the destination is always reachable from any origin
+        selected = []
+        
+        # First, add all force_include cities (except origin itself)
+        for city in force_include:
+            if city != origin and city in candidates:
+                selected.append(city)
+        
+        # Then, add top-scoring cities until we reach max_dests
+        for dest, _ in scored_dests:
+            if dest not in selected:
+                selected.append(dest)
+                if len(selected) >= max_dests:
+                    break
+        
+        return selected
     
     def _build_train_matrix(
         self,
         candidates: List[str],
         start_date: datetime,
-        num_days: int
+        num_days: int,
+        end: str
     ) -> Dict:
         """
         Step 2: Costruisce matrice treni con API reali
@@ -443,10 +466,12 @@ class DPItineraryPlanner:
                 
                 # OTTIMIZZAZIONE: per ogni origine, considera solo le MAX_CONNECTIONS_PER_CITY
                 # destinazioni più vicine/rilevanti (riduce chiamate API)
+                # IMPORTANTE: Sempre includere destinazione finale per garantire percorso valido
                 candidate_dests = self._select_relevant_destinations(
                     origin,
                     candidates,
-                    self.MAX_CONNECTIONS_PER_CITY
+                    self.MAX_CONNECTIONS_PER_CITY,
+                    force_include=[end]  # Ensure end city is always reachable
                 )
                 
                 for dest in candidate_dests:
@@ -598,6 +623,12 @@ class DPItineraryPlanner:
             (route, dp_scores)
         """
         print("\n🧮 Step 3: DP Route Optimization")
+        print(f"  📍 Start: {start}, End: {end}, Days: {num_days}")
+        print(f"  🌍 Candidates: {len(candidates)} cities")
+        print(f"  🔍 Is {end} in candidates? {end in candidates}")
+        if end not in candidates:
+            print(f"  ⚠️  WARNING: Destination {end} NOT in candidate list!")
+            print(f"  Candidates: {candidates}")
         
         # Inizializzazione
         dp = [{} for _ in range(num_days + 1)]
@@ -721,23 +752,116 @@ class DPItineraryPlanner:
                 print(f"  ⚠️  Could only find route using {best_day} days (requested {num_days})")
         
         if best_day == -1:
-            print(f"  ⚠️  Nessun percorso trovato per {start} -> {end}")
-            print(f"  ℹ️  DEBUG: Checking DP states...")
-            for d in range(1, min(num_days + 1, 4)):
+            print("=" * 80, flush=True)
+            print("🚨 FALLBACK TRIGGERED - DP FAILED TO FIND ROUTE 🚨", flush=True)
+            print(f"  ⚠️  Nessun percorso trovato per {start} -> {end}", flush=True)
+            print(f"  ℹ️  DEBUG: Checking DP states...", flush=True)
+            for d in range(1, min(num_days + 1, 6)):
                 if dp[d]:
-                    print(f"    Day {d}: cities reachable = {list(dp[d].keys())[:5]}")
-            # Fallback: Try to create route with MAX_DAYS_PER_CITY=2 constraint
-            # Pattern: start (2 days) -> ... -> end
-            if num_days <= 2:
-                route = [start] + [end]
-            elif num_days == 3:
-                route = [start, start, end]
-            elif num_days == 4:
-                route = [start, start, end, end]
-            else:  # 5+ days
-                # Try: start(2) + middle(2) + end(1+)
-                route = [start, start, end, end, end][:num_days]
-            print(f"  ℹ️  Using fallback route with MAX_DAYS constraint: {route}")
+                    cities = list(dp[d].keys())
+                    print(f"    Day {d}: {len(cities)} cities reachable: {cities[:8]}", flush=True)
+                    if end in cities:
+                        print(f"      ✓ {end} is reachable on day {d}!", flush=True)
+                else:
+                    print(f"    Day {d}: NO CITIES REACHABLE", flush=True)
+            
+            print(f"  ℹ️  Checking if {end} ever appears in DP...", flush=True)
+            end_found_days = []
+            for d in range(1, num_days + 1):
+                if end in dp[d]:
+                    end_found_days.append(d)
+            print(f"    {end} found on days: {end_found_days if end_found_days else 'NEVER - this is the problem!'}", flush=True)
+            print("=" * 80, flush=True)
+            
+            # SMART FALLBACK: Find intermediate cities along the geographic route
+            print(f"  ℹ️  Generating smart fallback route...", flush=True)
+            
+            # Get coordinates
+            start_city_data = self.city_db.get_city_by_name(start)
+            end_city_data = self.city_db.get_city_by_name(end)
+            
+            if start_city_data and end_city_data and num_days >= 5:
+                # Find cities along the path
+                from math import radians, cos, sin, asin, sqrt, atan2
+                
+                start_lat = start_city_data['coordinates']['lat']
+                start_lon = start_city_data['coordinates']['lon']
+                end_lat = end_city_data['coordinates']['lat']
+                end_lon = end_city_data['coordinates']['lon']
+                
+                # Find cities that are between start and end
+                intermediate_cities = []
+                for city in candidates:
+                    if city == start or city == end:
+                        continue
+                    
+                    city_data = self.city_db.get_city_by_name(city)
+                    if not city_data:
+                        continue
+                    
+                    clat = city_data['coordinates']['lat']
+                    clon = city_data['coordinates']['lon']
+                    
+                    # Distance to line start->end
+                    # Use cross-track distance approximation
+                    # If city is between start and end, use it
+                    
+                    # Distance from start to city
+                    dlat = radians(clat - start_lat)
+                    dlon = radians(clon - start_lon)
+                    a = sin(dlat/2)**2 + cos(radians(start_lat)) * cos(radians(clat)) * sin(dlon/2)**2
+                    dist_start_city = 2 * asin(sqrt(a)) * 6371
+                    
+                    # Distance from city to end
+                    dlat = radians(end_lat - clat)
+                    dlon = radians(end_lon - clon)
+                    a = sin(dlat/2)**2 + cos(radians(clat)) * cos(radians(end_lat)) * sin(dlon/2)**2
+                    dist_city_end = 2 * asin(sqrt(a)) * 6371
+                    
+                    # Distance start to end
+                    dlat = radians(end_lat - start_lat)
+                    dlon = radians(end_lon - start_lon)
+                    a = sin(dlat/2)**2 + cos(radians(start_lat)) * cos(radians(end_lat)) * sin(dlon/2)**2
+                    dist_start_end = 2 * asin(sqrt(a)) * 6371
+                    
+                    # If detour is small, city is on the route
+                    detour = (dist_start_city + dist_city_end) - dist_start_end
+                    
+                    if detour < 150:  # Max 150km detour
+                        intermediate_cities.append((city, dist_start_city))
+                
+                # Sort by distance from start
+                intermediate_cities.sort(key=lambda x: x[1])
+                
+                # Build route: start (2 days) -> intermediate cities (respecting MAX_DAYS) -> end
+                route = [start, start]  # Start with 2 days at start (respects MAX_DAYS_PER_CITY=2)
+                days_used = 2
+                
+                for city, _ in intermediate_cities:
+                    if days_used >= num_days - 1:  # Leave at least 1 day for end
+                        break
+                    days_to_add = min(self.MAX_DAYS_PER_CITY, num_days - days_used - 1)
+                    route.extend([city] * days_to_add)
+                    days_used += days_to_add
+                
+                # Fill remaining days with end city
+                remaining_days = num_days - days_used
+                route.extend([end] * remaining_days)
+                
+                print(f"  ✅ Smart fallback generated: {route}", flush=True)
+                print(f"  ℹ️  Intermediate cities: {[c for c, _ in intermediate_cities[:3]]}", flush=True)
+            else:
+                # Simple fallback for short trips or missing data
+                if num_days <= 2:
+                    route = [start] + [end]
+                elif num_days == 3:
+                    route = [start, start, end]
+                elif num_days == 4:
+                    route = [start, start, end, end]
+                else:  # 5+ days
+                    route = [start, start, end, end, end][:num_days]
+                print(f"  ℹ️  Using simple fallback route: {route}", flush=True)
+            
             return route, dp
         
         # Ricostruisci percorso
