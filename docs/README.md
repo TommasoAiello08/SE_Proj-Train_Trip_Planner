@@ -1,36 +1,37 @@
-# 🚂 Constraint-Based Train Trip Planner
+# 🚂 Italian Train Trip Planner - Documentation
 
-Un pianificatore intelligente di viaggi in treno che utilizza **Constraint Satisfaction Problem (CSP)** per trovare le soluzioni migliori in base alle preferenze dell'utente, integrando dati real-time da Trenitalia con informazioni geografiche (OpenStreetMap) e meteo (OpenWeather).
+Advanced train travel planning system using **Dynamic Programming optimization**, real-time Trenitalia data, OpenStreetMap POI curation, and weather integration.
 
-## 📋 Indice
+## 📋 Documentation Index
 
-- [Caratteristiche](#-caratteristiche)
-- [Tecnologie](#-tecnologie)
-- [Installazione](#-installazione)
-- [Utilizzo](#-utilizzo)
-- [Constraint Supportati](#-constraint-supportati)
-- [Architettura](#-architettura)
-- [File del Progetto](#-file-del-progetto)
-- [Roadmap](#-roadmap)
-- [Contribuire](#-contribuire)
+- [🏠 Main README](../README.md) - Quick start and overview
+- [🧮 DP Algorithm](DP_ALGORITHM.md) - **NEW**: Complete Dynamic Programming explanation
+- [📊 Optimization Report](OPTIMIZATION_REPORT.md) - Performance analysis and improvements
+- [📝 Project Summary](RIEPILOGO_PROGETTO.md) - Italian project overview
+- [🔍 API Analysis](ANALISI_API_E_ARCHITETTURA.md) - API architecture and design
+- [📈 Analysis Summary](SINTESI_ANALISI.md) - Condensed technical analysis
 
-## ✨ Caratteristiche
+## ✨ Key Features (v2.0)
 
-- **🎯 Pianificazione basata su constraint**: Definisci le tue preferenze e il sistema trova automaticamente le soluzioni migliori
-- **⏱️ Dati real-time**: Informazioni aggiornate su ritardi, binari, cancellazioni
-- **🗺️ Integrazione geografica**: Calcolo distanze, servizi nelle vicinanze (via OpenStreetMap)
-- **🌤️ Considerazioni meteo**: Valutazione condizioni meteorologiche per il viaggio (via OpenWeather)
-- **📊 Scoring intelligente**: Le soluzioni sono ordinate per rilevanza rispetto ai tuoi constraint
-- **🔄 Gestione coincidenze**: Calcolo automatico tempi di cambio e compatibilità treni
+- **🧮 Dynamic Programming Route Optimizer**: Multi-day trips with intelligent city selection
+- **🎯 MAX 2 Days Per City**: Enforced constraint for diverse itineraries  
+- **🗺️ 106 Italian Cities**: Complete coverage with train connections
+- **📍 Curated POIs**: 20 attractions per city from 28+ OpenStreetMap categories
+- **🚆 Real Train Integration**: Trenitalia API with time-aware scheduling
+- **⏰ Running Clock System**: Realistic 8:00-21:00 daily schedule
+- **🌤️ Weather-Aware**: 5-day forecasts for activity optimization
+- **💰 Smart Cost Estimation**: Detailed budget breakdown per day
 
-## 🛠 Tecnologie
+## 🛠 Technologies
 
-- **Python 3.8+**: Linguaggio principale
-- **API Trenitalia (ViaggiaTreno)**: Dati treni, stazioni, orari
-- **OpenStreetMap Nominatim**: Geocoding e informazioni geografiche
-- **OpenWeather API**: Previsioni meteo
-- **requests**: HTTP client per API
-- **SQLite**: Cache locale per stazioni e coordinate
+- **Python 3.10+**: Core language
+- **Dynamic Programming**: Multi-day route optimization with constraints
+- **Trenitalia ViaggiaTreno API**: Real-time train data
+- **OpenStreetMap Overpass**: POI data (tourism, historic, leisure, natural, amenity)
+- **OpenWeather API**: Weather forecasts
+- **Flask**: REST API backend (port 5001)
+- **Leaflet.js**: Interactive map with route visualization
+- **JSON Cache**: OSM POI caching system
 
 ## 📦 Installazione
 

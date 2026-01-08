@@ -149,17 +149,22 @@ class OSMProvider:
         # Converte POI OSM in formato nostro database
         formatted_pois = self._format_pois(pois)
         
+        # Curate to max 20 POIs with diversity
+        curated_pois = self._select_diverse_pois(formatted_pois, max_pois=20, min_per_category=2)
+        
         # Salva in cache
         cache_data = {
             'city': city_name,
             'coordinates': coords,
-            'pois': formatted_pois,
+            'pois': curated_pois,
             'fetched_at': datetime.now().isoformat(),
-            'radius': radius
+            'radius': radius,
+            'total_pois_found': len(formatted_pois),
+            'curated_count': len(curated_pois)
         }
         self._save_to_cache(city_name, cache_data)
         
-        return formatted_pois
+        return curated_pois
     
     def _fetch_pois_with_retry(self, lat: float, lon: float, radius: int, max_retries: int = 3) -> List[Dict]:
         """
@@ -310,8 +315,89 @@ class OSMProvider:
             "park": 0.0,
             "attraction": 10.0
         }
-        return costs.get(poi_type, 8.0)
-    
+        return costs.get(poi_type, 8.0)    
+    def _select_diverse_pois(self, pois: List[Dict], max_pois: int = 20, min_per_category: int = 2) -> List[Dict]:
+        """
+        Seleziona POI diversificati con bilanciamento categorie e rating
+        
+        Strategy:
+        - Limit to max_pois (default 20)
+        - Ensure min_per_category per each target category (natura, cultura, arte, cibo, mare, montagna, storia, sport)
+        - Balance ratings: not all 10s, mix of 10s, 9s, 8s, 7s
+        - Prefer higher rated but ensure variety
+        """
+        if len(pois) <= max_pois:
+            return pois
+        
+        # Target categories we want to ensure diversity
+        target_categories = ['natura', 'cultura', 'arte', 'cibo', 'mare', 'montagna', 'storia', 'sport']
+        
+        # Organize POIs by category
+        by_category = {cat: [] for cat in target_categories}
+        other_pois = []
+        
+        for poi in pois:
+            poi_cats = poi.get('categories', [])
+            matched = False
+            for cat in target_categories:
+                if cat in poi_cats:
+                    by_category[cat].append(poi)
+                    matched = True
+                    break
+            if not matched:
+                other_pois.append(poi)
+        
+        # Sort each category by rating
+        for cat in target_categories:
+            by_category[cat].sort(key=lambda x: x.get('rating', 0), reverse=True)
+        
+        selected = []
+        
+        # Phase 1: Ensure min_per_category for each category (if available)
+        for cat in target_categories:
+            if by_category[cat]:
+                # For each category, take 1 top-rated and 1 mid-range for variety
+                if len(by_category[cat]) >= min_per_category:
+                    # Top rated
+                    selected.append(by_category[cat][0])
+                    # Mid-range (around 60% down the list)
+                    mid_idx = min(len(by_category[cat]) - 1, len(by_category[cat]) // 2)
+                    if mid_idx > 0:
+                        selected.append(by_category[cat][mid_idx])
+                    # Mark as used
+                    by_category[cat] = by_category[cat][1:mid_idx] + by_category[cat][mid_idx+1:]
+                else:
+                    # Take what we have
+                    selected.extend(by_category[cat][:min_per_category])
+                    by_category[cat] = by_category[cat][min_per_category:]
+        
+        # Phase 2: Fill remaining slots with best available, ensuring rating diversity
+        remaining_slots = max_pois - len(selected)
+        
+        if remaining_slots > 0:
+            # Collect remaining POIs
+            remaining = []
+            for cat in target_categories:
+                remaining.extend(by_category[cat])
+            remaining.extend(other_pois)
+            
+            # Sort by rating
+            remaining.sort(key=lambda x: x.get('rating', 0), reverse=True)
+            
+            # Take mix: 60% from top half, 40% from mid-range
+            top_count = int(remaining_slots * 0.6)
+            mid_count = remaining_slots - top_count
+            
+            # Top rated
+            selected.extend(remaining[:top_count])
+            
+            # Mid-range for variety
+            if len(remaining) > top_count:
+                mid_start = len(remaining) // 3  # Start from 1/3 down
+                mid_pois = remaining[mid_start:mid_start + mid_count]
+                selected.extend(mid_pois)
+        
+        return selected[:max_pois]    
     def get_train_station(self, city_name: str) -> Optional[Dict]:
         """
         Trova stazione ferroviaria principale della città

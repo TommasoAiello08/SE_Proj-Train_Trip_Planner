@@ -22,7 +22,7 @@ class TravelGraph:
     
     def __init__(self, cache_file: str = None):
         self.api = apitr(decodeJson=True)
-        self.city_db = CityDatabase()
+        self.city_db = CityDatabase(use_osm=True)
         
         if cache_file is None:
             # Default: cerca in cache/ relativo alla root del progetto

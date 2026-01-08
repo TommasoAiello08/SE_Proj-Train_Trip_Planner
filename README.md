@@ -1,43 +1,82 @@
 # 🚂 Italian Train Trip Planner
 
-Intelligent train travel planning system for Italy, with Trenitalia API integration, OpenStreetMap, and weather data.
+Intelligent train travel planning system for Italy with **Dynamic Programming optimization**, Trenitalia API integration, OpenStreetMap POI curation, and real-time weather data.
 
 ![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)
 ![Cities](https://img.shields.io/badge/cities-106-green.svg)
+![POIs](https://img.shields.io/badge/POIs-2000+-orange.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
 ## ✨ Features
 
-- **🗺️ Interactive Map**: Visual selection of **106 Italian provinces** dynamically loaded from OpenStreetMap
-- **🧠 Smart AI Planning**: Intelligent suggestions based on interests, weather, and train connections
-- **🎯 Two Modes**:
-  - **Departure Only**: System automatically suggests the best destinations
-  - **Departure + Arrival**: Optimal route planning between two specific cities
-- **📍 Detailed Itineraries**: Complete day-by-day view with POIs, costs, and timings
-- **🌤️ Weather Integration**: 5-day forecasts to optimize activities
-- **🎨 Smart POIs**: Over 3000 attractions from OpenStreetMap categorized by interests
-- **🚆 Trenitalia API**: Real train schedules and connections
-- **💰 Cost Estimation**: Automatic daily and total budget calculation
+- **🗺️ Interactive Map**: Visual selection of **106 Italian provinces** with real-time train connections
+- **🧠 Smart AI Planning with Dynamic Programming**: 
+  - Multi-day route optimization with train schedule integration
+  - **MAX 2 days per city** constraint for diverse itineraries
+  - Automatic intermediate city selection for long-distance trips
+  - Score-based city ranking considering interests, attractions, and travel efficiency
+- **🎯 Dual Planning Modes**:
+  - **Smart Open**: System suggests best destinations from starting city
+  - **Smart Fixed**: Optimal route planning between departure and arrival cities with intelligent waypoints
+- **📍 Curated POIs**: 
+  - **20 attractions per city** carefully selected from 28+ OpenStreetMap categories
+  - Category diversity: natura, cultura, arte, cibo, mare, montagna, storia, sport
+  - Rating balance: mix of top-rated (10/9) and hidden gems (8/7)
+- **🚆 Real Train Integration**: 
+  - Trenitalia API with time-aware search (9:00 day 1, 13:00+ subsequent days)
+  - Running clock system (8:00-21:00) for realistic daily schedules
+  - Travel time + minimum stay constraints
+- **🌤️ Weather Integration**: 5-day forecasts to optimize outdoor activities
+- **💰 Smart Cost Estimation**: Day-by-day budget with trains, attractions, and meals
+- **⚡ Performance Optimized**: 
+  - OSM cache system for instant POI loading
+  - Optimized DP parameters (35 candidates, 8 connections per city)
+  - Realistic computation time estimation (~22-24s for 5-day trips)
 
 ## 🏗️ Architecture
 
 ```
 SEProejct/
 ├── frontend/
-│   ├── backend_server.py      # Flask API server
-│   └── map_planner.html       # Single-page web interface
+│   ├── backend_server.py       # Flask API server (port 5001)
+│   └── map_planner.html        # Interactive web interface with route visualization
 ├── src/
-│   ├── itinerary_planner.py   # Core planning logic
-│   ├── city_database.py       # 106 cities database manager
-│   ├── travel_graph.py        # Dijkstra routing algorithm
-│   ├── osm_provider.py        # OpenStreetMap integration
-│   └── weather_provider.py    # Weather API integration
+│   ├── dp_itinerary_planner.py # ⭐ NEW: Dynamic Programming route optimizer
+│   ├── itinerary_planner.py    # Legacy greedy planner
+│   ├── city_database.py        # 106 cities with OSM on-demand loading
+│   ├── travel_graph.py         # Train connection graph
+│   ├── osm_provider.py         # OpenStreetMap POI curation (20/city)
+│   ├── weather_provider.py     # Weather API integration
+│   └── apitr.py                # Trenitalia API wrapper
+├── cache/
+│   └── osm/                    # 106 city POI caches (20 curated each)
 ├── data/
-│   ├── cities_database.json   # 106 Italian provinces with POIs
-│   └── provinces_static.json  # Fallback database
+│   ├── cities_database.json    # 106 Italian provinces metadata
+│   └── provinces_static.json   # Fallback static data
 └── scripts/
-    └── build_complete_database.py  # OSM data downloader
+    ├── pull_all_osm_data.py    # Complete OSM cache refresh
+    └── build_complete_database.py  # Database builder
 ```
+
+### 🧮 Dynamic Programming Algorithm
+
+The DP optimizer (`dp_itinerary_planner.py`) features:
+
+- **State**: `dp[day][city]` = maximum score reaching city on given day
+- **Transitions**: STAY (same city) vs MOVE (different city with train)
+- **Constraints**:
+  - `MAX_DAYS_PER_CITY = 2`: Forces diverse itineraries
+  - `MIN_STAY_HOURS = 4`: Minimum stay after travel
+  - `MAX_TRAIN_HOURS = 8`: Daily travel limit
+- **Scoring**:
+  - City attractions + interest match
+  - Route-based candidate selection (favors cities along path)
+  - Exploration bonus (50pts) vs Stay bonus (30pts)
+  - Travel penalty (time × 5)
+- **Features**:
+  - Consecutive day tracking to enforce city limits
+  - Knapsack POI selection with running clock (8:00-21:00)
+  - Day-by-day schedule generation without duplicates
 
 ## 🚀 Installation and Setup
 
@@ -102,19 +141,25 @@ Open in browser: **http://localhost:8080/map_planner.html**
 1. Click **"🎯 Departure + Arrival"**
 2. Click departure city (**green**) then arrival city (**red**)
 3. Set parameters and click **"🔍 Plan Trip"**
-4. System plans optimal route between the two cities
+4. System uses **Dynamic Programming** to find optimal route with intermediate stops
+5. **Example**: Trieste → Palermo (5 days) generates route like:
+   - Day 1-2: Trieste (2 days, 20 POIs)
+   - Day 3-4: Bologna or Rome (2 days, 20 POIs)  
+   - Day 5: Palermo (1 day, 20 POIs)
 
 ### Itinerary Result
 
 The itinerary shows for each day:
 - 🏙️ **City and date**
-- 🚂 **Train journey** (duration and estimated times)
+- 🚂 **Train journey** (departure time, duration, arrival)
 - 🎯 **Daily activities** with:
-  - Attraction name and type
-  - ⏱️ Visit duration
+  - Attraction name, type, and category
+  - ⏱️ Visit duration (3h per POI)
   - 💰 Entrance cost
-  - ⭐ Quality rating
-- 📊 **Daily summary**: available hours and total cost
+  - ⭐ Quality rating (7-10)
+  - 🕐 Start time in running clock (8:00-21:00)
+- 📊 **Daily summary**: total POIs, available hours, and daily cost
+- 🗺️ **Route visualization**: Red dotted line connecting cities on map
 
 ## 🔧 Troubleshooting
 
@@ -205,11 +250,19 @@ source .venv/bin/activate
 ./stop.sh   # Stop all servers
 ```
 
-### Regenerate Database from OSM
+### Regenerate OSM Cache
 ```bash
-python scripts/build_complete_database.py
-# Downloads 107 Italian provinces with ~30 POIs each
-# Time: ~5-6 minutes with automatic retry
+python scripts/pull_all_osm_data.py
+# Downloads fresh POI data for all 106 cities
+# Each city: 20 curated POIs from 28+ categories
+# Time: ~8-10 minutes with adaptive radius (15km → 25km → 35km)
+# Output: cache/osm/*.json
+```
+
+### Verify Cache
+```bash
+ls cache/osm/*.json | wc -l  # Should show 106
+cat cache/osm/roma.json | python -m json.tool | grep '"name"' | head -20
 ```
 
 ### Verify System Health
@@ -223,12 +276,18 @@ curl http://localhost:5001/api/cities | python -m json.tool | head -20
 
 ## 👥 Contributors
 
-- **Alessandro**: Bug fixes e validazioni (branch fix/ale)
-- **Tommaso**: Database expansion e frontend enhancement
+- **Tommaso Aiello**: Core development, DP optimization, OSM integration, POI curation
+- **Alessandro**: Bug fixes, validation, and testing (branch fix/ale)
+
+## 🎓 Project Info
+
+Developed for **Software Engineering** course at Università degli Studi di Milano.
+
+**Academic Year**: 2025/2026
 
 ## 📄 License
 
-MIT License - vedi LICENSE file per dettagli
+MIT License - see LICENSE file for details
 
 ---
 
@@ -237,37 +296,28 @@ MIT License - vedi LICENSE file per dettagli
 source .venv/bin/activate && ./start.sh
 ```
 
-## 🎯 API Backend
+**🐛 Troubleshooting**: If routes show empty days, restart system: `./stop.sh && ./start.sh`
 
-### POST `/api/plan`
+**📈 Performance**: 5-day trip computation ~22-24 seconds with OSM cache
 
-```json
-{
-  "mode": "smart_open",
-  "start_city": "Milano",
-  "end_city": "Napoli",
-  "start_date": "2026-01-10",
-  "duration": 3,
-  "interests": ["art", "history"]
-}
-```
+## 🆕 Recent Updates (January 2026)
 
-## 📊 Algorithms
+### v2.0 - Dynamic Programming Revolution
+- ✅ Complete DP-based route optimizer with multi-day support
+- ✅ MAX_DAYS_PER_CITY constraint (max 2 days per location)
+- ✅ OSM POI curation: 20 diverse attractions per city
+- ✅ Running clock system (8:00-21:00) for realistic schedules
+- ✅ Time-aware train search (9:00 day 1, 13:00+ subsequent days)
+- ✅ Route visualization with red dotted lines on map
+- ✅ Performance optimization (35 candidates, 8 connections)
+- ✅ Category diversity: 8 categories with min 2 POIs each
+- ✅ Rating balance: mix of 10/9 (top) and 8/7 (hidden gems)
+- ✅ On-demand OSM enrichment for cities with missing POIs
 
-- **Dijkstra**: Optimal path between cities
-- **Knapsack**: Daily POI selection
-- **Greedy**: Attraction scoring
-- **Haversine**: Distance calculation
-
-## 🔑 APIs Used
-
-- **Trenitalia ViaggiaTreno**: Train schedules (public)
-- **OpenStreetMap**: Geocoding and POIs
-- **OpenWeatherMap**: Weather forecasts
-
-## 📝 License
-
-MIT License
+### Known Limitations
+- Long-distance routes (>1000 km) may take 30-40 seconds
+- OSM cache recommended for all 106 cities (use `pull_all_osm_data.py`)
+- Maximum trip duration: 30 days
 
 ---
 

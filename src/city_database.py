@@ -59,10 +59,18 @@ class CityDatabase:
         return self.cities.get(city_id)
     
     def get_city_by_name(self, name: str) -> Optional[Dict]:
-        """Get city by name (first from static DB, then from OSM)"""
+        """Get city by name (first from static DB, then enrich with OSM)"""
         name_lower = name.lower()
         for city in self.cities.values():
             if city['name'].lower() == name_lower:
+                # If OSM enabled and city has no attractions, try to enrich from OSM
+                if self.use_osm and self.osm_provider and len(city.get('attractions', [])) == 0:
+                    print(f"🌐 Enriching '{name}' with OSM data...")
+                    pois = self.osm_provider.get_city_pois(name)
+                    if pois:
+                        city['attractions'] = pois
+                        city['categories'] = list({cat for poi in pois for cat in poi.get('categories', [])})
+                        print(f"✅ Added {len(pois)} POIs to {name}")
                 return city
         
         # If not found and OSM enabled, query OSM on-demand

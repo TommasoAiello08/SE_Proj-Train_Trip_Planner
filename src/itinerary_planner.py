@@ -87,7 +87,7 @@ class ItineraryPlanner:
     """
     
     def __init__(self, use_weather: bool = True):
-        self.city_db = CityDatabase()
+        self.city_db = CityDatabase(use_osm=True)
         self.travel_graph = TravelGraph()
         self.use_weather = use_weather
         self.weather_provider = WeatherProvider() if use_weather else None

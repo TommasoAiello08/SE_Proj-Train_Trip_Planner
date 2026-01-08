@@ -73,15 +73,16 @@ class DPItineraryPlanner:
     """
     
     def __init__(self):
-        self.city_db = CityDatabase()
+        self.city_db = CityDatabase(use_osm=True)
         self.api_treni = apitr(decodeJson=True)
         
         # Parametri configurabili
         self.HOURS_PER_DAY = 10  # Ore disponibili per giorno
-        self.MIN_STAY_HOURS = 6  # Minimo 6 ore per provincia (~ 1 giorno)
-        self.MAX_TRAIN_HOURS_PER_DAY = 6  # Max ore di treno al giorno
-        self.MAX_CANDIDATES = 40  # Top-N province da considerare (increased for better coverage)
-        self.MAX_CONNECTIONS_PER_CITY = 8  # Max destinazioni da considerare per città
+        self.MIN_STAY_HOURS = 4  # Minimo 4 ore per provincia (reduced for flexibility)
+        self.MAX_TRAIN_HOURS_PER_DAY = 8  # Max ore di treno al giorno (increased for long trips)
+        self.MAX_DAYS_PER_CITY = 2  # Max giorni consecutivi per città
+        self.MAX_CANDIDATES = 35  # Top-N province da considerare (optimized for speed)
+        self.MAX_CONNECTIONS_PER_CITY = 8  # Max destinazioni da considerare per città (optimized for speed)
         self.TRAIN_BUFFER_HOURS = 1.0  # Buffer per accesso stazione
         
         # Cache
@@ -102,19 +103,34 @@ class DPItineraryPlanner:
         """
         num_days = trip_input.days
         
-        # Candidate selection: ~0.1s
-        t_candidates = 0.1
+        # Candidate selection: ~0.3s (route-based scoring with 2 distance calcs per city)
+        t_candidates = 0.3
         
         # Train matrix: API calls più costose
-        # Stima: MAX_CANDIDATES * MAX_CONNECTIONS_PER_CITY * num_days * 0.3s/call
-        num_api_calls = self.MAX_CANDIDATES * self.MAX_CONNECTIONS_PER_CITY * num_days
-        t_train_matrix = num_api_calls * 0.3  # 0.3s per chiamata API media
+        # Con MAX_CANDIDATES=35 e MAX_CONNECTIONS_PER_CITY=8
+        # Potenziali chiamate: 35 * 8 * num_days = 280 * num_days
+        # Ma molte sono cached dopo primo run
         
-        # DP: rapido
-        t_dp = 0.5
+        # Stima realistica basata su testing:
+        # - Primo run: ~15-20 API calls per giorno (cache misses)
+        # - Run successivi: ~3-5 API calls per giorno (alcune cache expiry)
+        # - Cache hits: resto delle 280 * num_days chiamate
         
-        # Detail generation: Knapsack
-        t_details = num_days * 0.2
+        estimated_new_calls = min(18 * num_days, 40)  # Cap at 40 total
+        total_possible_calls = self.MAX_CANDIDATES * self.MAX_CONNECTIONS_PER_CITY * num_days
+        estimated_cached_calls = max(0, total_possible_calls - estimated_new_calls)
+        
+        # Tempo: 0.5s per API call nuova, 0.003s per cache hit
+        t_train_matrix = (estimated_new_calls * 0.5) + (estimated_cached_calls * 0.003)
+        
+        # DP: più lento ora che valuta anche "stay" option
+        # Complessità: O(days * candidates^2) per move + O(days * candidates) per stay
+        # Con 35 candidates e stay option: ~(35^2 + 35) * days = ~1260 * days operations
+        t_dp = max(0.5, num_days * 0.2)  # Scala con giorni (ridotto)
+        
+        # Detail generation: Knapsack con 20 POIs per città (più veloce che con 100+)
+        # Ma ora dobbiamo gestire multiple days per city
+        t_details = num_days * 0.15
         
         total = t_candidates + t_train_matrix + t_dp + t_details
         
@@ -123,8 +139,7 @@ class DPItineraryPlanner:
             'train_matrix': t_train_matrix,
             'dp_optimization': t_dp,
             'detail_generation': t_details,
-            'total_estimated': total,
-            'num_api_calls': num_api_calls
+            'total_estimated': total
         }
     
     def plan_trip(self, trip_input: TripInput) -> List[DaySchedule]:
@@ -145,8 +160,7 @@ class DPItineraryPlanner:
         
         # Stima tempo
         time_estimate = self.estimate_computation_time(trip_input)
-        print(f"⏱️  Tempo stimato: {time_estimate['total_estimated']:.1f}s (~{time_estimate['num_api_calls']} API calls)")
-        print(f"🎯 Interessi: {', '.join(trip_input.interests)}")
+        print(f"⏱️  Tempo stimato: {time_estimate['total_estimated']:.1f}s")
         print("="*70)
         
         # Step 1: Candidate selection
@@ -210,10 +224,24 @@ class DPItineraryPlanner:
         all_cities = self.city_db.get_all_cities()
         scored_cities = []
         
-        # Get start city coordinates for regional bias
+        # Get start city coordinates for route-based scoring
         start_city_data = self.city_db.get_city_by_name(start)
+        end_city_data = self.city_db.get_city_by_name(end)
         start_lat = start_city_data['coordinates']['lat'] if start_city_data else None
         start_lon = start_city_data['coordinates']['lon'] if start_city_data else None
+        end_lat = end_city_data['coordinates']['lat'] if end_city_data else None
+        end_lon = end_city_data['coordinates']['lon'] if end_city_data else None
+        
+        # Pre-calculate total distance start->end (only once!)
+        total_distance = 0
+        if start_lat and start_lon and end_lat and end_lon:
+            from math import radians, cos, sin, asin, sqrt
+            lat1, lon1, lat2, lon2 = map(radians, [start_lat, start_lon, end_lat, end_lon])
+            dlat = lat2 - lat1
+            dlon = lon2 - lon1
+            a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+            c = 2 * asin(sqrt(a))
+            total_distance = 6371 * c
         
         for city_data in all_cities:
             city_name = city_data['name']
@@ -226,24 +254,34 @@ class DPItineraryPlanner:
             # Calcola score con regional bias
             score = self._calculate_province_score(city_data, interests)
             
-            # Add regional proximity bonus (prefer cities closer to start)
-            if start_lat and start_lon:
+            # Add route proximity bonus: favor cities along the path from start to end
+            if start_lat and start_lon and end_lat and end_lon:
                 from math import radians, cos, sin, asin, sqrt
                 city_lat = city_data['coordinates']['lat']
                 city_lon = city_data['coordinates']['lon']
                 
+                # Distance from start
                 lat1, lon1, lat2, lon2 = map(radians, [start_lat, start_lon, city_lat, city_lon])
                 dlat = lat2 - lat1
                 dlon = lon2 - lon1
                 a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
                 c = 2 * asin(sqrt(a))
-                distance_km = 6371 * c
+                dist_from_start = 6371 * c
                 
-                # Strong proximity bonus: Max 200 points at 0km, decays to 0 at 800km+
-                # This ensures nearby cities rank significantly higher than distant ones
-                # even if distant cities have more attractions
-                proximity_bonus = max(0, (800 - distance_km) / 800) * 200
-                score += proximity_bonus
+                # Distance from end
+                lat1, lon1, lat2, lon2 = map(radians, [end_lat, end_lon, city_lat, city_lon])
+                dlat = lat2 - lat1
+                dlon = lon2 - lon1
+                a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+                c = 2 * asin(sqrt(a))
+                dist_from_end = 6371 * c
+                
+                # Bonus for cities along the route: penalize detours
+                # If dist_from_start + dist_from_end ≈ total_distance, city is on the path
+                detour = (dist_from_start + dist_from_end) - total_distance
+                route_bonus = max(0, 200 - (detour / 10))  # Max 200 bonus, -10 per km of detour
+                
+                score += route_bonus
             
             scored_cities.append((city_name, score))
         
@@ -392,8 +430,12 @@ class DPItineraryPlanner:
         
         # Per ogni giorno
         for day in range(1, num_days + 1):
+            # For day 1: search trains from 9:00 (early morning)
+            # For day 2+: search trains from 13:00 (after lunch/activities)
+            search_hour = 9 if day == 1 else 13
             current_date = start_date + timedelta(days=day - 1)
-            print(f"  📅 Giorno {day} ({current_date.strftime('%Y-%m-%d')})")
+            current_datetime = current_date.replace(hour=search_hour, minute=0, second=0)
+            print(f"  📅 Giorno {day} ({current_datetime.strftime('%Y-%m-%d %H:%M')})")
             
             # Per ogni città di origine
             for origin in candidates:
@@ -415,7 +457,7 @@ class DPItineraryPlanner:
                     train_info = self._find_best_train(
                         origin,
                         dest,
-                        current_date
+                        current_datetime
                     )
                     
                     if train_info:
@@ -560,6 +602,7 @@ class DPItineraryPlanner:
         # Inizializzazione
         dp = [{} for _ in range(num_days + 1)]
         prev = [{} for _ in range(num_days + 1)]
+        consecutive_days = [{} for _ in range(num_days + 1)]  # Track consecutive days in same city
         
         # dp[0][start] = score(start)
         start_score = self._calculate_province_score(
@@ -568,8 +611,18 @@ class DPItineraryPlanner:
         )
         dp[1][start] = start_score
         prev[1][start] = None
+        consecutive_days[1][start] = 1
         
         print(f"  Inizializzazione: dp[1][{start}] = {start_score:.2f}")
+        
+        # Cache city scores to avoid repeated calculations
+        city_scores = {}
+        for city in candidates:
+            city_data = self.city_db.get_city_by_name(city)
+            if city_data:
+                city_scores[city] = self._calculate_province_score(city_data, interests)
+            else:
+                city_scores[city] = 0.0
         
         # DP: giorni 1 -> N
         for d in range(1, num_days):
@@ -585,6 +638,25 @@ class DPItineraryPlanner:
                 # Prossimo giorno
                 next_day = d + 1
                 
+                # Check how many consecutive days we've been in city A
+                days_in_A = consecutive_days[d].get(A, 1)
+                
+                # Option 1: STAY in same city A for another day
+                # Only allow if not already at MAX_DAYS_PER_CITY limit
+                if days_in_A < self.MAX_DAYS_PER_CITY:
+                    stay_reward = city_scores.get(A, 0.0) * 0.7
+                    stay_bonus = 30
+                    stay_score = dp[d][A] + stay_reward + stay_bonus
+                    
+                    if A not in dp[next_day] or stay_score > dp[next_day][A]:
+                        dp[next_day][A] = stay_score
+                        prev[next_day][A] = A  # Same city
+                        consecutive_days[next_day][A] = days_in_A + 1
+                        print(f"    {A} -> {A} (stay day {days_in_A + 1}): score={stay_score:.2f}")
+                else:
+                    print(f"    {A} -> {A} (stay): BLOCKED - already {days_in_A} days")
+                
+                # Option 2: MOVE to different city B
                 # Prova tutte le destinazioni B
                 for B in candidates:
                     if B == A:
@@ -609,9 +681,8 @@ class DPItineraryPlanner:
                     if travel_time > self.MAX_TRAIN_HOURS_PER_DAY:
                         continue
                     
-                    # Reward provincia B
-                    B_data = self.city_db.get_city_by_name(B)
-                    reward_B = self._calculate_province_score(B_data, interests)
+                    # Reward provincia B (from cache)
+                    reward_B = city_scores.get(B, 0.0)
                     
                     # Exploration bonus: encourage visiting new cities
                     # For multi-day trips, visiting more cities is generally better
@@ -626,6 +697,7 @@ class DPItineraryPlanner:
                     if B not in dp[next_day] or new_score > dp[next_day][B]:
                         dp[next_day][B] = new_score
                         prev[next_day][B] = A
+                        consecutive_days[next_day][B] = 1  # Reset to 1 when moving to new city
                         print(f"    {A} -> {B}: score={new_score:.2f} (travel={travel_time:.1f}h)")
         
         # Backtrack: trova percorso migliore che arriva a 'end'
@@ -645,12 +717,16 @@ class DPItineraryPlanner:
                 if end in dp[d] and dp[d][end] > best_score:
                     best_score = dp[d][end]
                     best_day = d
-            print(f"  ⚠️  Could only find route using {best_day} days (requested {num_days})")
+            if best_day > 0:
+                print(f"  ⚠️  Could only find route using {best_day} days (requested {num_days})")
         
         if best_day == -1:
             print(f"  ⚠️  Nessun percorso trovato per {start} -> {end}")
-            # Fallback: percorso diretto
-            return [start, end], {}
+            # Fallback: stay at start for most days, then direct to end
+            # This ensures all days are used even if routing fails
+            route = [start] * (num_days - 1) + [end]
+            print(f"  ℹ️  Using fallback: staying {num_days-1} days at {start}, then to {end}")
+            return route, dp
         
         # Ricostruisci percorso
         route = []
@@ -662,6 +738,12 @@ class DPItineraryPlanner:
                 break
         
         route.reverse()
+        
+        # If route is shorter than num_days, pad with STAY at start
+        if len(route) < num_days:
+            extra_days = num_days - len(route)
+            print(f"  ℹ️  Padding route with {extra_days} extra day(s) at {start}")
+            route = [start] * (extra_days + 1) + route[1:]  # +1 for original start day
         
         print(f"\n  ✅ Route ottimale: {' -> '.join(route)}")
         print(f"     Score totale: {best_score:.2f}")
@@ -677,46 +759,26 @@ class DPItineraryPlanner:
         """
         Step 4: Alloca giorni a province (minimo 1 per provincia)
         
-        Strategia:
-        - Ogni provincia unica minimo 1 giorno
-        - Giorni extra vanno alla provincia con più attrazioni
-        
-        Note: route may have duplicates (e.g., round trips), so we work with unique cities
+        NOTE: route now contains day-by-day sequence with possible duplicates
+        e.g., ['Trieste', 'Trieste', 'Firenze', 'Roma', 'Roma']
+        This function just counts consecutive occurrences.
         """
         print("\n📆 Step 4: Allocating Days")
         
-        # Get unique cities preserving order
-        unique_cities = []
-        seen = set()
-        for city in route:
-            if city not in seen:
-                unique_cities.append(city)
-                seen.add(city)
+        # Count consecutive days in each city from the route
+        allocation = {}
+        i = 0
+        while i < len(route):
+            city = route[i]
+            count = 1
+            # Count consecutive occurrences
+            while i + count < len(route) and route[i + count] == city:
+                count += 1
+            allocation[city] = count
+            i += count
         
-        # Minimo 1 giorno per provincia
-        allocation = {city: 1 for city in unique_cities}
-        
-        remaining_days = total_days - len(unique_cities)
-        
-        print(f"  Unique cities in route: {len(unique_cities)}, Total days: {total_days}, Extra days: {remaining_days}")
-        
-        if remaining_days > 0:
-            # Giorni extra alla provincia con più attrazioni
-            city_scores = []
-            for city in unique_cities:
-                city_data = self.city_db.get_city_by_name(city)
-                num_attractions = len(city_data.get('attractions', []))
-                city_scores.append((city, num_attractions))
-            
-            city_scores.sort(key=lambda x: x[1], reverse=True)
-            
-            # Distribuisci giorni extra round-robin tra top cities
-            for i in range(remaining_days):
-                city = city_scores[i % len(city_scores)][0]
-                allocation[city] += 1
-        
-        for city, days in allocation.items():
-            print(f"  {city}: {days} giorn{'o' if days == 1 else 'i'}")
+        print(f"  Day allocation: {allocation}")
+        print(f"  Total days allocated: {sum(allocation.values())}")
         
         return allocation
     
@@ -741,105 +803,88 @@ class DPItineraryPlanner:
         prev_city = None
         used_attractions = {}  # Track attractions already used per city
         
-        # Get unique cities from route in order
-        unique_route = []
-        seen = set()
-        for city in route:
-            if city not in seen:
-                unique_route.append(city)
-                seen.add(city)
-        
-        # Iterate through cities in route order
-        for city in unique_route:
-            num_days = day_allocation.get(city, 1)
-            print(f"\n  📍 {city.upper()} ({num_days} giorn{'o' if num_days == 1 else 'i'})")
+        # IMPORTANT: Iterate day-by-day through route (which may have duplicates)
+        # Example: ['Trieste', 'Trieste', 'Firenze', 'Roma', 'Roma']
+        # This ensures we generate schedule for each day correctly
+        for day_idx, city in enumerate(route):
+            print(f"\n  📍 Day {day_counter}: {city.upper()}")
             
             # Initialize used attractions for this city
             if city not in used_attractions:
                 used_attractions[city] = set()
             
-            for day_in_city in range(num_days):
-                # Calcola viaggio se primo giorno in città
-                travel_time = 0.0
-                morning_train = None
-                from_city_for_day = None  # Only set if we're traveling
-                
-                if day_in_city == 0 and prev_city is not None:
-                    # First day in this city AND coming from another city
-                    # Cerca treno nella matrice
-                    if day_counter in train_matrix:
-                        if prev_city in train_matrix[day_counter]:
-                            if city in train_matrix[day_counter][prev_city]:
-                                train_info = train_matrix[day_counter][prev_city][city]
-                                travel_time = train_info['travel_time']
-                                morning_train = train_info
-                                from_city_for_day = prev_city
-                                print(f"    🚂 Treno: {prev_city} → {city}, {travel_time:.1f}h")
-                
-                # Running clock: giornata inizia alle 8:00 (ora 8)
-                running_clock = 8.0
-                
-                # Aggiungi tempo viaggio treno
-                running_clock += travel_time
-                
-                # Limite orario: 21:00 (ora 21)
-                max_clock = 21.0
-                
-                # Knapsack: seleziona attrazioni con running clock
-                pois = self._knapsack_attractions_with_clock(
-                    city,
-                    interests,
-                    running_clock,
-                    max_clock,
-                    exclude_names=used_attractions[city]
-                )
-                
-                # Calcola ore disponibili totali per backward compatibility
-                available_hours = max_clock - running_clock
-                
-                # Aggiungi le attrazioni selezionate alla lista used
-                for poi in pois:
-                    used_attractions[city].add(poi['name'])
-                
-                # Calcola running clock finale (dopo POI)
-                final_clock = running_clock + (len(pois) * 3.0)
-                
-                # Costo giornata
-                daily_cost = self._estimate_daily_cost(city, pois, travel_time, morning_train)
-                
-                day_schedule = DaySchedule(
-                    day_number=day_counter,
-                    date=current_date,
-                    city=city,
-                    morning_train=morning_train,
-                    travel_time=travel_time,
-                    from_city=from_city_for_day,  # None if staying in same city
-                    pois=pois,
-                    available_hours=available_hours,
-                    estimated_cost=daily_cost,
-                    daily_cost=daily_cost
-                )
-                
-                schedule.append(day_schedule)
-                
-                print(f"    Giorno {day_counter}: {len(pois)} POI, €{daily_cost:.2f} (clock: {final_clock:.1f}h/{max_clock:.0f}h)")
-                
-                # Verifica se clock supera limite (21:00)
-                if final_clock > max_clock:
-                    print(f"    ⚠️  Clock limit reached ({final_clock:.1f}h > {max_clock:.0f}h) - day ended")
-                
-                # Solo se è l'ULTIMO giorno in questa città, cerchiamo treno per la prossima
-                # (evita bug quando ci fermiamo più giorni nella stessa città)
-                is_last_day_in_city = (day_in_city == num_days - 1)
-                if is_last_day_in_city:
-                    # Questo è l'ultimo giorno in questa città, possiamo cercare treni per domani
-                    # Il train_matrix verrà consultato nel prossimo ciclo (prossima città)
-                    pass
-                
-                current_date += timedelta(days=1)
-                day_counter += 1
+            # Check if we're arriving from another city today
+            travel_time = 0.0
+            morning_train = None
+            from_city_for_day = None
             
-            prev_city = city
+            if day_idx > 0 and route[day_idx - 1] != city:
+                # We're moving from a different city
+                prev_city = route[day_idx - 1]
+                # Cerca treno nella matrice
+                if day_counter in train_matrix:
+                    if prev_city in train_matrix[day_counter]:
+                        if city in train_matrix[day_counter][prev_city]:
+                            train_info = train_matrix[day_counter][prev_city][city]
+                            travel_time = train_info['travel_time']
+                            morning_train = train_info
+                            from_city_for_day = prev_city
+                            print(f"    🚂 Treno: {prev_city} → {city}, {travel_time:.1f}h")
+                
+            # Running clock: giornata inizia alle 8:00 (ora 8)
+            running_clock = 8.0
+            
+            # Aggiungi tempo viaggio treno
+            running_clock += travel_time
+            
+            # Limite orario: 21:00 (ora 21)
+            max_clock = 21.0
+            
+            # Knapsack: seleziona attrazioni con running clock
+            pois = self._knapsack_attractions_with_clock(
+                city,
+                interests,
+                running_clock,
+                max_clock,
+                exclude_names=used_attractions[city]
+            )
+            
+            # Calcola ore disponibili totali per backward compatibility
+            available_hours = max_clock - running_clock
+            
+            # Aggiungi le attrazioni selezionate alla lista used
+            for poi in pois:
+                used_attractions[city].add(poi['name'])
+            
+            # Calcola running clock finale (dopo POI)
+            final_clock = running_clock + (len(pois) * 3.0)
+            
+            # Costo giornata
+            daily_cost = self._estimate_daily_cost(city, pois, travel_time, morning_train)
+            
+            day_schedule = DaySchedule(
+                day_number=day_counter,
+                date=current_date,
+                city=city,
+                morning_train=morning_train,
+                travel_time=travel_time,
+                from_city=from_city_for_day,  # None if staying in same city
+                pois=pois,
+                available_hours=available_hours,
+                estimated_cost=daily_cost,
+                daily_cost=daily_cost
+            )
+            
+            schedule.append(day_schedule)
+            
+            print(f"    Giorno {day_counter}: {len(pois)} POI, €{daily_cost:.2f} (clock: {final_clock:.1f}h/{max_clock:.0f}h)")
+            
+            # Verifica se clock supera limite (21:00)
+            if final_clock > max_clock:
+                print(f"    ⚠️  Clock limit reached ({final_clock:.1f}h > {max_clock:.0f}h) - day ended")
+            
+            current_date += timedelta(days=1)
+            day_counter += 1
         
         return schedule
     
