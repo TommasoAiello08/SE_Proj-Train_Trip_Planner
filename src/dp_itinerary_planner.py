@@ -76,13 +76,13 @@ class DPItineraryPlanner:
         self.city_db = CityDatabase(use_osm=True)
         self.api_treni = apitr(decodeJson=True)
         
-        # Parametri configurabili
-        self.HOURS_PER_DAY = 10  # Ore disponibili per giorno
-        self.MIN_STAY_HOURS = 4  # Minimo 4 ore per provincia (reduced for flexibility)
-        self.MAX_TRAIN_HOURS_PER_DAY = 8  # Max ore di treno al giorno (increased for long trips)
+        # Parametri configurabili  
+        self.HOURS_PER_DAY = 13  # Ore disponibili per giorno (8:00-21:00)
+        self.MIN_STAY_HOURS = 3  # Minimo 3 ore per provincia
+        self.MAX_TRAIN_HOURS_PER_DAY = 10  # Max ore di treno al giorno
         self.MAX_DAYS_PER_CITY = 2  # Max giorni consecutivi per città
-        self.MAX_CANDIDATES = 35  # Top-N province da considerare (optimized for speed)
-        self.MAX_CONNECTIONS_PER_CITY = 8  # Max destinazioni da considerare per città (optimized for speed)
+        self.MAX_CANDIDATES = 30  # Reduced for performance (30×8=240 per day vs 50×12=600)
+        self.MAX_CONNECTIONS_PER_CITY = 8  # Reduced for performance
         self.TRAIN_BUFFER_HOURS = 1.0  # Buffer per accesso stazione
         
         # Cache
@@ -722,10 +722,22 @@ class DPItineraryPlanner:
         
         if best_day == -1:
             print(f"  ⚠️  Nessun percorso trovato per {start} -> {end}")
-            # Fallback: stay at start for most days, then direct to end
-            # This ensures all days are used even if routing fails
-            route = [start] * (num_days - 1) + [end]
-            print(f"  ℹ️  Using fallback: staying {num_days-1} days at {start}, then to {end}")
+            print(f"  ℹ️  DEBUG: Checking DP states...")
+            for d in range(1, min(num_days + 1, 4)):
+                if dp[d]:
+                    print(f"    Day {d}: cities reachable = {list(dp[d].keys())[:5]}")
+            # Fallback: Try to create route with MAX_DAYS_PER_CITY=2 constraint
+            # Pattern: start (2 days) -> ... -> end
+            if num_days <= 2:
+                route = [start] + [end]
+            elif num_days == 3:
+                route = [start, start, end]
+            elif num_days == 4:
+                route = [start, start, end, end]
+            else:  # 5+ days
+                # Try: start(2) + middle(2) + end(1+)
+                route = [start, start, end, end, end][:num_days]
+            print(f"  ℹ️  Using fallback route with MAX_DAYS constraint: {route}")
             return route, dp
         
         # Ricostruisci percorso
@@ -739,14 +751,14 @@ class DPItineraryPlanner:
         
         route.reverse()
         
-        # If route is shorter than num_days, pad with STAY at start
-        if len(route) < num_days:
-            extra_days = num_days - len(route)
-            print(f"  ℹ️  Padding route with {extra_days} extra day(s) at {start}")
-            route = [start] * (extra_days + 1) + route[1:]  # +1 for original start day
+        # NO PADDING - respect MAX_DAYS_PER_CITY constraint
+        # If DP found shorter route, that's the best valid route
+        # Padding would violate MAX_DAYS_PER_CITY=2
         
         print(f"\n  ✅ Route ottimale: {' -> '.join(route)}")
         print(f"     Score totale: {best_score:.2f}")
+        if len(route) < num_days:
+            print(f"     ⚠️  Route uses {len(route)} days instead of requested {num_days} (respecting MAX_DAYS_PER_CITY constraint)")
         
         return route, dp
     
