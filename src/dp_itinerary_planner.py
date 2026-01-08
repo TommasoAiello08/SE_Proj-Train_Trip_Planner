@@ -80,8 +80,8 @@ class DPItineraryPlanner:
         self.HOURS_PER_DAY = 10  # Ore disponibili per giorno
         self.MIN_STAY_HOURS = 6  # Minimo 6 ore per provincia (~ 1 giorno)
         self.MAX_TRAIN_HOURS_PER_DAY = 6  # Max ore di treno al giorno
-        self.MAX_CANDIDATES = 15  # Top-N province da considerare (ridotto per performance)
-        self.MAX_CONNECTIONS_PER_CITY = 6  # Max destinazioni da considerare per città
+        self.MAX_CANDIDATES = 40  # Top-N province da considerare (increased for better coverage)
+        self.MAX_CONNECTIONS_PER_CITY = 8  # Max destinazioni da considerare per città
         self.TRAIN_BUFFER_HOURS = 1.0  # Buffer per accesso stazione
         
         # Cache
@@ -182,6 +182,7 @@ class DPItineraryPlanner:
         
         # Step 5: Genera schedule dettagliato con Knapsack
         schedule = self._generate_detailed_schedule(
+            route,
             day_allocation,
             train_matrix,
             trip_input.start_date,
@@ -204,9 +205,15 @@ class DPItineraryPlanner:
         - Numero attrazioni per categorie preferite
         - Rating medio
         - Popolarità
+        - Distanza geografica (regional bias)
         """
         all_cities = self.city_db.get_all_cities()
         scored_cities = []
+        
+        # Get start city coordinates for regional bias
+        start_city_data = self.city_db.get_city_by_name(start)
+        start_lat = start_city_data['coordinates']['lat'] if start_city_data else None
+        start_lon = start_city_data['coordinates']['lon'] if start_city_data else None
         
         for city_data in all_cities:
             city_name = city_data['name']
@@ -216,20 +223,55 @@ class DPItineraryPlanner:
                 scored_cities.append((city_name, 999999.0))
                 continue
             
-            # Calcola score
+            # Calcola score con regional bias
             score = self._calculate_province_score(city_data, interests)
+            
+            # Add regional proximity bonus (prefer cities closer to start)
+            if start_lat and start_lon:
+                from math import radians, cos, sin, asin, sqrt
+                city_lat = city_data['coordinates']['lat']
+                city_lon = city_data['coordinates']['lon']
+                
+                lat1, lon1, lat2, lon2 = map(radians, [start_lat, start_lon, city_lat, city_lon])
+                dlat = lat2 - lat1
+                dlon = lon2 - lon1
+                a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+                c = 2 * asin(sqrt(a))
+                distance_km = 6371 * c
+                
+                # Strong proximity bonus: Max 200 points at 0km, decays to 0 at 800km+
+                # This ensures nearby cities rank significantly higher than distant ones
+                # even if distant cities have more attractions
+                proximity_bonus = max(0, (800 - distance_km) / 800) * 200
+                score += proximity_bonus
+            
             scored_cities.append((city_name, score))
         
         # Ordina e prendi top-N
         scored_cities.sort(key=lambda x: x[1], reverse=True)
         
         # Top candidates + start + end
-        candidates = [start]
-        for city, score in scored_cities[1:self.MAX_CANDIDATES+1]:
-            if city != start and city != end:
+        candidates = []
+        added = set()
+        
+        # Add start city first
+        candidates.append(start)
+        added.add(start)
+        
+        # Add top-N cities (excluding start and end which already have high scores)
+        for city, score in scored_cities:
+            if city not in added and city != end:
                 candidates.append(city)
-        if end not in candidates:
+                added.add(city)
+                if len(candidates) >= self.MAX_CANDIDATES:
+                    break
+        
+        # Ensure end city is included
+        if end not in added:
             candidates.append(end)
+        
+        print(f"  🎯 Selected {len(candidates)} candidate cities from {len(all_cities)} total")
+        print(f"  📋 Top candidates: {', '.join(candidates[:10])}{'...' if len(candidates) > 10 else ''}")
         
         return candidates
     
@@ -264,10 +306,10 @@ class DPItineraryPlanner:
         avg_popularity = total_popularity / len(attractions)
         
         score = (
-            category_match * 10 +  # Match interessi
-            len(attractions) * 0.5 +  # Numero attrazioni
+            category_match * 20 +  # Match interessi (increased weight)
+            len(attractions) * 0.3 +  # Numero attrazioni (reduced weight)
             avg_rating * 2 +  # Qualità
-            avg_popularity * 1  # Popolarità
+            avg_popularity * 0.5  # Popolarità (reduced weight)
         )
         
         return score
@@ -571,11 +613,15 @@ class DPItineraryPlanner:
                     B_data = self.city_db.get_city_by_name(B)
                     reward_B = self._calculate_province_score(B_data, interests)
                     
-                    # Penalità treno (meno tempo di viaggio = meglio)
-                    travel_penalty = travel_time * 2
+                    # Exploration bonus: encourage visiting new cities
+                    # For multi-day trips, visiting more cities is generally better
+                    exploration_bonus = 50  # Bonus for each new city visited
+                    
+                    # Travel penalty (light - we want to encourage exploration)
+                    travel_penalty = travel_time * 5  # Increased from 2 to make long travels slightly more expensive
                     
                     # Update DP
-                    new_score = dp[d][A] + reward_B - travel_penalty
+                    new_score = dp[d][A] + reward_B + exploration_bonus - travel_penalty
                     
                     if B not in dp[next_day] or new_score > dp[next_day][B]:
                         dp[next_day][B] = new_score
@@ -583,13 +629,23 @@ class DPItineraryPlanner:
                         print(f"    {A} -> {B}: score={new_score:.2f} (travel={travel_time:.1f}h)")
         
         # Backtrack: trova percorso migliore che arriva a 'end'
+        # IMPORTANT: For best experience, prefer using ALL available days
+        # Only look at day num_days first, then fall back to earlier days
         best_day = -1
         best_score = float('-inf')
         
-        for d in range(num_days, 0, -1):
-            if end in dp[d] and dp[d][end] > best_score:
-                best_score = dp[d][end]
-                best_day = d
+        # First, try to find path that uses all days
+        if end in dp[num_days]:
+            best_day = num_days
+            best_score = dp[num_days][end]
+            print(f"  ✅ Found route using all {num_days} days")
+        else:
+            # Fall back to shorter routes
+            for d in range(num_days - 1, 0, -1):
+                if end in dp[d] and dp[d][end] > best_score:
+                    best_score = dp[d][end]
+                    best_day = d
+            print(f"  ⚠️  Could only find route using {best_day} days (requested {num_days})")
         
         if best_day == -1:
             print(f"  ⚠️  Nessun percorso trovato per {start} -> {end}")
@@ -622,27 +678,39 @@ class DPItineraryPlanner:
         Step 4: Alloca giorni a province (minimo 1 per provincia)
         
         Strategia:
-        - Ogni provincia minimo 1 giorno
+        - Ogni provincia unica minimo 1 giorno
         - Giorni extra vanno alla provincia con più attrazioni
+        
+        Note: route may have duplicates (e.g., round trips), so we work with unique cities
         """
         print("\n📆 Step 4: Allocating Days")
         
-        # Minimo 1 giorno per provincia
-        allocation = {city: 1 for city in route}
+        # Get unique cities preserving order
+        unique_cities = []
+        seen = set()
+        for city in route:
+            if city not in seen:
+                unique_cities.append(city)
+                seen.add(city)
         
-        remaining_days = total_days - len(route)
+        # Minimo 1 giorno per provincia
+        allocation = {city: 1 for city in unique_cities}
+        
+        remaining_days = total_days - len(unique_cities)
+        
+        print(f"  Unique cities in route: {len(unique_cities)}, Total days: {total_days}, Extra days: {remaining_days}")
         
         if remaining_days > 0:
             # Giorni extra alla provincia con più attrazioni
             city_scores = []
-            for city in route:
+            for city in unique_cities:
                 city_data = self.city_db.get_city_by_name(city)
                 num_attractions = len(city_data.get('attractions', []))
                 city_scores.append((city, num_attractions))
             
             city_scores.sort(key=lambda x: x[1], reverse=True)
             
-            # Distribuisci giorni extra
+            # Distribuisci giorni extra round-robin tra top cities
             for i in range(remaining_days):
                 city = city_scores[i % len(city_scores)][0]
                 allocation[city] += 1
@@ -654,6 +722,7 @@ class DPItineraryPlanner:
     
     def _generate_detailed_schedule(
         self,
+        route: List[str],
         day_allocation: Dict[str, int],
         train_matrix: Dict,
         start_date: datetime,
@@ -661,6 +730,8 @@ class DPItineraryPlanner:
     ) -> List[DaySchedule]:
         """
         Step 5: Genera schedule dettagliato con Knapsack per attrazioni
+        
+        IMPORTANT: Iterate through route in order, not day_allocation.items()
         """
         print("\n📋 Step 5: Generating Detailed Schedule")
         
@@ -670,7 +741,17 @@ class DPItineraryPlanner:
         prev_city = None
         used_attractions = {}  # Track attractions already used per city
         
-        for city, num_days in day_allocation.items():
+        # Get unique cities from route in order
+        unique_route = []
+        seen = set()
+        for city in route:
+            if city not in seen:
+                unique_route.append(city)
+                seen.add(city)
+        
+        # Iterate through cities in route order
+        for city in unique_route:
+            num_days = day_allocation.get(city, 1)
             print(f"\n  📍 {city.upper()} ({num_days} giorn{'o' if num_days == 1 else 'i'})")
             
             # Initialize used attractions for this city
@@ -681,8 +762,10 @@ class DPItineraryPlanner:
                 # Calcola viaggio se primo giorno in città
                 travel_time = 0.0
                 morning_train = None
+                from_city_for_day = None  # Only set if we're traveling
                 
                 if day_in_city == 0 and prev_city is not None:
+                    # First day in this city AND coming from another city
                     # Cerca treno nella matrice
                     if day_counter in train_matrix:
                         if prev_city in train_matrix[day_counter]:
@@ -690,6 +773,7 @@ class DPItineraryPlanner:
                                 train_info = train_matrix[day_counter][prev_city][city]
                                 travel_time = train_info['travel_time']
                                 morning_train = train_info
+                                from_city_for_day = prev_city
                                 print(f"    🚂 Treno: {prev_city} → {city}, {travel_time:.1f}h")
                 
                 # Running clock: giornata inizia alle 8:00 (ora 8)
@@ -729,7 +813,7 @@ class DPItineraryPlanner:
                     city=city,
                     morning_train=morning_train,
                     travel_time=travel_time,
-                    from_city=prev_city,
+                    from_city=from_city_for_day,  # None if staying in same city
                     pois=pois,
                     available_hours=available_hours,
                     estimated_cost=daily_cost,

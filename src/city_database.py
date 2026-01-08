@@ -16,7 +16,7 @@ except ImportError:
 class CityDatabase:
     """Manager for cities database with OSM on-demand support"""
     
-    def __init__(self, db_path: str = None, use_osm: bool = True):
+    def __init__(self, db_path: str = None, use_osm: bool = False):
         if db_path is None:
             # Default: look for data/ relative to file location
             db_path = Path(__file__).parent.parent / "data" / "cities_database.json"

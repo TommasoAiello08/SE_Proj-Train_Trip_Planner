@@ -33,67 +33,12 @@ planner = DPItineraryPlanner()
 
 def suggest_cities(start_city, num_days, interests, budget):
     """
-    Suggest destination cities based on starting point and preferences
-    
-    Strategy:
-    - For 1-2 days: 2 cities (start + 1 nearby)
-    - For 3-4 days: 3-4 cities (start + 2-3 destinations)
-    - For 5+ days: 4-5 cities (start + 3-4 destinations)
-    
-    Selection criteria:
-    - Geographic proximity (minimize travel time)
-    - Interest matching (high score for user interests)
-    - Variety (different regions/experiences)
+    Suggest destination cities for round-trip mode
+    Uses same selection logic as DP planner with proximity bias
     """
-    from city_database import CityDatabase
-    
-    db = CityDatabase()
-    start_city_data = db.get_city_by_name(start_city)
-    
-    if not start_city_data:
-        # Fallback to popular cities
-        return ['Milano', 'Firenze', 'Roma'][:min(num_days, 3)]
-    
-    # Use only cities from static DB to avoid OSM delays
-    # Get all available cities directly from database
-    all_city_names = [city['name'] for city in db.cities.values()]
-    
-    # Get all cities and calculate scores
-    city_scores = []
-    
-    for city_name in all_city_names:
-        if city_name == start_city:
-            continue
-            
-        city_data = db.get_city_by_name(city_name)
-        if not city_data:
-            continue
-        
-        # Calculate score based on interests
-        score = db.calculate_city_score(
-            city=city_data,
-            user_interests=interests,
-            travel_time_hours=0  # For now, simplified
-        )
-        
-        city_scores.append((city_name, score))
-    
-    # Sort by score (descending)
-    city_scores.sort(key=lambda x: x[1], reverse=True)
-    
-    # Determine number of destination cities
-    if num_days <= 2:
-        num_destinations = 1
-    elif num_days <= 4:
-        num_destinations = min(2, num_days - 1)
-    else:
-        num_destinations = min(4, num_days - 1)
-    
-    # Select top cities
-    suggested = [start_city]
-    suggested.extend([city for city, score in city_scores[:num_destinations]])
-    
-    return suggested
+    # For smart_open mode (round trip), end city = start city
+    # Let the DP planner determine the route
+    return [start_city]  # DP planner will determine the full route
 
 
 @app.route('/api/estimate-time', methods=['POST'])
@@ -205,9 +150,9 @@ def plan_trip():
         
         # Determine end city based on mode
         if mode == 'smart_open':
-            # AI suggests destinations from start city
-            suggested = suggest_cities(start_city, duration, interests, budget)
-            end_city = suggested[-1] if len(suggested) > 1 else start_city
+            # Round trip: start and return to same city
+            # DP planner will determine optimal route
+            end_city = start_city
             
         elif mode == 'smart_fixed':
             # DP trova route ottimale tra start e end

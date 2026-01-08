@@ -346,7 +346,9 @@
         </div>
     </div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-polylinedecorator/1.1.0/leaflet.polylineDecorator.min.js"></script>
     <script>
         const BACKEND_URL = 'http://localhost:5001';
         
@@ -465,7 +467,7 @@
                 if (selectedEnd) {
                     html += `<div class="city-badge end">🔴 ${selectedEnd}</div>`;
                     submitBtn.disabled = false;
-                    instructions.innerHTML = '✅ Departure and arrival selected. Click "Plan Trip"';
+                    instructions.innerHTML = 'Departure and arrival selected ✅ <br>  Click "Plan Trip"';
                 } else {
                     submitBtn.disabled = true;
                     instructions.innerHTML = '📍 Now click on an arrival city';
@@ -522,7 +524,7 @@
                 // Mostra stima tempo
                 const minutes = Math.ceil(estimatedSeconds / 60);
                 document.getElementById('timeEstimate').textContent = 
-                    `⏱️ Estimated time: ${minutes} minut${minutes > 1 ? 'i' : 'o'} (~${Math.round(estimatedSeconds)}s)`;
+                    `⏱️ Estimated time: ${minutes} minut${minutes > 1 ? 'es' : 'e'} (~${Math.round(estimatedSeconds)}s)`;
                 
                 // Simula progress con steps
                 let progress = 0;
@@ -549,7 +551,7 @@
                             document.getElementById('step3').style.color = '#065f46';
                         }
                         if (progress > 85 && document.getElementById('step4').textContent.includes('⏳')) {
-                            document.getElementById('step4').innerHTML = '⏳ Selecting attractions... (quasi fatto)';
+                            document.getElementById('step4').innerHTML = '⏳ Selecting attractions...';
                         }
                     }
                 }, 500);
