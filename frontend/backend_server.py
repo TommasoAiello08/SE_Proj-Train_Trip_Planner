@@ -159,6 +159,19 @@ def plan_trip():
             if not end_city:
                 return jsonify({'error': 'end_city required for smart_fixed mode'}), 400
             
+            # Validate Sardinia isolation - cannot travel between island and mainland
+            sardinian_cities = {'Cagliari', 'Sassari', 'Nuoro', 'Oristano'}
+            start_in_sardinia = start_city in sardinian_cities
+            end_in_sardinia = end_city in sardinian_cities
+            
+            if start_in_sardinia != end_in_sardinia:
+                # One city in Sardinia, the other on mainland - impossible by train!
+                return jsonify({
+                    'error': 'Cannot plan train trip between Sardinia and mainland Italy',
+                    'detail': f'{start_city} and {end_city} are not connected by train. Sardinia is an island with no rail connection to the mainland.',
+                    'suggestion': 'Please choose both cities either in Sardinia or on the mainland.'
+                }), 400
+            
         elif mode == 'custom':
             # User fornisce lista città: usa prima e ultima come start/end
             cities = data.get('cities', [])

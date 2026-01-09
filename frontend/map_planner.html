@@ -31,7 +31,7 @@
         .sidebar {
             background: white;
             border-radius: 16px;
-            padding: 1.5rem;
+            padding: 1.37rem;
             overflow-y: auto;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
         }
@@ -50,34 +50,34 @@
 
         h1 {
             color: #667eea;
-            font-size: 1.5rem;
-            margin-bottom: 0.5rem;
+            font-size: 1.37rem;
+            margin-bottom: 0.46rem;
         }
 
         .subtitle {
             color: #6b7280;
-            font-size: 0.9rem;
-            margin-bottom: 1.5rem;
+            font-size: 0.82rem;
+            margin-bottom: 1.37rem;
         }
 
         .form-group {
-            margin-bottom: 1.2rem;
+            margin-bottom: 1.09rem;
         }
 
         label {
             display: block;
             font-weight: 600;
             color: #374151;
-            margin-bottom: 0.5rem;
-            font-size: 0.9rem;
+            margin-bottom: 0.46rem;
+            font-size: 0.82rem;
         }
 
         input, select {
             width: 100%;
-            padding: 0.6rem;
+            padding: 0.55rem;
             border: 2px solid #e5e7eb;
             border-radius: 8px;
-            font-size: 0.9rem;
+            font-size: 0.82rem;
         }
 
         input:focus, select:focus {
@@ -87,18 +87,18 @@
 
         .mode-toggle {
             display: flex;
-            gap: 0.5rem;
-            margin-bottom: 1.5rem;
+            gap: 0.46rem;
+            margin-bottom: 1.37rem;
         }
 
         .mode-btn {
             flex: 1;
-            padding: 0.6rem;
+            padding: 0.55rem;
             border: 2px solid #e5e7eb;
             background: white;
             border-radius: 8px;
             cursor: pointer;
-            font-size: 0.85rem;
+            font-size: 0.77rem;
             transition: all 0.3s;
         }
 
@@ -110,19 +110,19 @@
 
         .selection-display {
             background: #f3f4f6;
-            padding: 1rem;
+            padding: 0.91rem;
             border-radius: 8px;
-            margin-bottom: 1rem;
+            margin-bottom: 0.91rem;
         }
 
         .city-badge {
             display: inline-block;
             background: #667eea;
             color: white;
-            padding: 0.4rem 0.8rem;
+            padding: 0.36rem 0.73rem;
             border-radius: 20px;
-            margin: 0.25rem;
-            font-size: 0.85rem;
+            margin: 0.23rem;
+            font-size: 0.77rem;
         }
 
         .city-badge.start {
@@ -135,12 +135,12 @@
 
         .btn-primary {
             width: 100%;
-            padding: 0.8rem;
+            padding: 0.73rem;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
             border-radius: 8px;
-            font-size: 1rem;
+            font-size: 0.91rem;
             font-weight: 600;
             cursor: pointer;
             transition: transform 0.2s;
@@ -157,44 +157,147 @@
 
         .btn-secondary {
             width: 100%;
-            padding: 0.6rem;
+            padding: 0.55rem;
             background: white;
             color: #667eea;
             border: 2px solid #667eea;
             border-radius: 8px;
-            font-size: 0.9rem;
+            font-size: 0.82rem;
             cursor: pointer;
-            margin-top: 0.5rem;
+            margin-top: 0.46rem;
         }
 
         .interest-tags {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 0.5rem;
+            gap: 0.46rem;
         }
 
         .interest-tag {
             display: flex;
             align-items: center;
-            padding: 0.5rem;
+            padding: 0.46rem;
             border: 2px solid #e5e7eb;
             border-radius: 6px;
-            font-size: 0.85rem;
+            font-size: 0.77rem;
             cursor: pointer;
         }
 
         .interest-tag input {
             width: auto;
-            margin-right: 0.4rem;
+            margin-right: 0.36rem;
         }
 
         .instructions {
             background: #fef3c7;
-            padding: 0.8rem;
+            padding: 0.73rem;
+            border-radius: 8px;
+            font-size: 0.77rem;
+            color: #92400e;
+            margin-bottom: 0.91rem;
+        }
+
+        .error-message {
+            background: #fee2e2;
+            border: 2px solid #ef4444;
+            padding: 1rem;
             border-radius: 8px;
             font-size: 0.85rem;
-            color: #92400e;
+            color: #991b1b;
+            margin-bottom: 0.91rem;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+            animation: shake 0.5s;
+        }
+
+        /* Error Modal/Popup Styles */
+        .error-modal {
+            display: none;
+            position: fixed;
+            z-index: 10000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            animation: fadeIn 0.3s;
+        }
+
+        .error-modal.show {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .error-modal-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 16px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            animation: slideIn 0.3s;
+            text-align: center;
+        }
+
+        .error-modal-icon {
+            font-size: 4rem;
             margin-bottom: 1rem;
+        }
+
+        .error-modal-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #991b1b;
+            margin-bottom: 1rem;
+        }
+
+        .error-modal-message {
+            font-size: 1rem;
+            color: #374151;
+            line-height: 1.6;
+            margin-bottom: 1.5rem;
+        }
+
+        .error-modal-close {
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .error-modal-close:hover {
+            background: #dc2626;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideIn {
+            from { 
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to { 
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
         }
 
         @media (max-width: 1024px) {
@@ -232,6 +335,12 @@
 
             <div class="instructions" id="instructions">
                 📍 Click a city on the map to select the departure
+            </div>
+
+            <div class="error-message" id="errorMessage">
+                ⚠️ <strong>Cannot plan train trip between Sardegna and mainland Italy</strong><br>
+                There are no train connections between Sardegna and Continental Italy.<br>
+                Please choose both cities either in Sardegna or on mainland Italy/Sicilia.
             </div>
 
             <div class="selection-display">
@@ -301,6 +410,19 @@
         </div>
     </div>
 
+    <!-- Error Modal -->
+    <div id="errorModal" class="error-modal">
+        <div class="error-modal-content">
+            <div class="error-modal-icon">🚫</div>
+            <div class="error-modal-title">Cannot Plan This Trip</div>
+            <div class="error-modal-message">
+                There are no train connections between Sardegna and Continental Italy.<br><br>
+                Please choose both cities either in Sardegna or on mainland Italy/Sicilia.
+            </div>
+            <button class="error-modal-close" onclick="closeErrorModal()">Close</button>
+        </div>
+    </div>
+
     <!-- Itinerary Display Section (hidden by default) -->
     <div id="itinerarySection" style="display: none;">
         <div style="max-width: 1200px; margin: 0 auto; padding: 20px;">
@@ -356,9 +478,56 @@
         let markers = {};
         let provincesData = [];  // Store all cities with coordinates
         let routePolyline = null;  // Store the route line
+        let routeDecorator = null;  // Store the route decorator (arrows)
+        let allRouteLayers = [];  // Track ALL route-related layers
         let currentMode = 'smart_open';  // or 'smart_fixed'
         let selectedStart = null;
         let selectedEnd = null;
+
+        // Clear all route elements from map
+        function clearAllRoutes() {
+            // Remove tracked layers
+            if (routePolyline) {
+                map.removeLayer(routePolyline);
+                routePolyline = null;
+            }
+            if (routeDecorator) {
+                map.removeLayer(routeDecorator);
+                routeDecorator = null;
+            }
+            
+            // Remove all tracked route layers
+            allRouteLayers.forEach(layer => {
+                try {
+                    map.removeLayer(layer);
+                } catch (e) {
+                    // Layer might already be removed
+                }
+            });
+            allRouteLayers = [];
+            
+            // Remove polylines and decorators but KEEP city markers
+            map.eachLayer(function(layer) {
+                // Keep tiles
+                if (layer instanceof L.TileLayer) {
+                    return;
+                }
+                // Keep city markers (CircleMarker)
+                if (layer instanceof L.CircleMarker) {
+                    return;
+                }
+                // Remove polylines (routes) and anything else
+                if (layer instanceof L.Polyline || layer instanceof L.LayerGroup) {
+                    try {
+                        map.removeLayer(layer);
+                    } catch (e) {
+                        console.warn('Could not remove layer:', e);
+                    }
+                }
+            });
+            
+            console.log('✓ Cleared all route layers (kept city markers)');
+        }
 
         // Initialize map
         function initMap() {
@@ -414,25 +583,52 @@
                 // Only select start city
                 selectedStart = city.name;
                 selectedEnd = null;
+                hideError();
                 updateMarkers();
                 updateSelectionDisplay();
             } else if (currentMode === 'smart_fixed') {
                 // Select start, then end
                 if (!selectedStart) {
                     selectedStart = city.name;
+                    hideError();
                 } else if (selectedStart === city.name) {
                     // Clicked same city, deselect
                     selectedStart = null;
+                    hideError();
                 } else if (!selectedEnd) {
+                    // Don't check constraint here - just allow selection
+                    // Validation happens on form submit
+                    hideError();
                     selectedEnd = city.name;
                 } else {
                     // Reset and start over
                     selectedStart = city.name;
                     selectedEnd = null;
+                    hideError();
                 }
                 updateMarkers();
                 updateSelectionDisplay();
             }
+        }
+
+        function showError() {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.classList.add('show');
+        }
+
+        function hideError() {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.classList.remove('show');
+        }
+
+        function showErrorModal() {
+            const modal = document.getElementById('errorModal');
+            modal.classList.add('show');
+        }
+
+        function closeErrorModal() {
+            const modal = document.getElementById('errorModal');
+            modal.classList.remove('show');
         }
 
         // Update marker colors
@@ -489,6 +685,7 @@
                 // Reset selection
                 selectedStart = null;
                 selectedEnd = null;
+                hideError();
                 updateMarkers();
                 updateSelectionDisplay();
             });
@@ -498,6 +695,8 @@
         document.getElementById('resetBtn').addEventListener('click', () => {
             selectedStart = null;
             selectedEnd = null;
+            hideError();
+            clearAllRoutes();  // Clear routes when resetting
             updateMarkers();
             updateSelectionDisplay();
         });
@@ -575,6 +774,22 @@
         document.getElementById('planForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
+            // Check Sardinia constraint BEFORE submitting
+            if (currentMode === 'smart_fixed') {
+                const sardinian_cities = new Set(['Cagliari', 'Sassari', 'Nuoro', 'Oristano']);
+                const startInSardinia = sardinian_cities.has(selectedStart);
+                const endInSardinia = sardinian_cities.has(selectedEnd);
+                
+                if (startInSardinia !== endInSardinia) {
+                    // Show modal error
+                    showErrorModal();
+                    return; // Stop submission
+                }
+            }
+
+            // Clear any existing route before planning new one
+            clearAllRoutes();
+
             const startDate = document.getElementById('startDate').value;
             const duration = parseInt(document.getElementById('duration').value);
             const interests = Array.from(document.querySelectorAll('input[name="interests"]:checked'))
@@ -641,11 +856,8 @@
 
         // Draw route on map
         function drawRouteOnMap(routeCities) {
-            // Remove existing route if any
-            if (routePolyline) {
-                map.removeLayer(routePolyline);
-                routePolyline = null;
-            }
+            // Remove existing route and decorators if any
+            clearAllRoutes();
             
             // Get coordinates for each city in the route
             const routeCoordinates = [];
@@ -667,27 +879,33 @@
                     lineCap: 'round'         // Rounded ends
                 }).addTo(map);
                 
-                // Add arrows to show direction
-                const decorator = L.polylineDecorator(routePolyline, {
-                    patterns: [
-                        {
-                            offset: '50%',
-                            repeat: 100,
-                            symbol: L.Symbol.arrowHead({
-                                pixelSize: 12,
-                                pathOptions: {
-                                    fillOpacity: 1,
-                                    weight: 0,
-                                    color: '#ef4444'
-                                }
-                            })
-                        }
-                    ]
-                });
+                // Track this layer
+                allRouteLayers.push(routePolyline);
                 
+                // Add arrows to show direction
                 // Only add decorator if the library is available
                 try {
-                    decorator.addTo(map);
+                    if (typeof L.polylineDecorator !== 'undefined') {
+                        routeDecorator = L.polylineDecorator(routePolyline, {
+                            patterns: [
+                                {
+                                    offset: '50%',
+                                    repeat: 100,
+                                    symbol: L.Symbol.arrowHead({
+                                        pixelSize: 12,
+                                        pathOptions: {
+                                            fillOpacity: 1,
+                                            weight: 0,
+                                            color: '#ef4444'
+                                        }
+                                    })
+                                }
+                            ]
+                        }).addTo(map);
+                        
+                        // Track this layer too
+                        allRouteLayers.push(routeDecorator);
+                    }
                 } catch (e) {
                     console.log('Polyline decorator not available, showing simple route line');
                 }
@@ -1010,10 +1228,14 @@
         }
 
         function goBackToMap() {
-            // Remove route line from map
+            // Remove route line and decorators from map
             if (routePolyline) {
                 map.removeLayer(routePolyline);
                 routePolyline = null;
+            }
+            if (routeDecorator) {
+                map.removeLayer(routeDecorator);
+                routeDecorator = null;
             }
             
             // Scroll back to top

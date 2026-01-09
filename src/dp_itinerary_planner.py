@@ -221,7 +221,14 @@ class DPItineraryPlanner:
         - Rating medio
         - Popolarità
         - Distanza geografica (regional bias)
+        - ISLAND RESTRICTION: Sardinia stays isolated (no trains to mainland)
         """
+        # Define island cities - NO trains to mainland Italy!
+        sardinian_cities = {'Cagliari', 'Sassari', 'Nuoro', 'Oristano'}
+        
+        # Check if start is in Sardinia
+        start_in_sardinia = start in sardinian_cities
+        
         all_cities = self.city_db.get_all_cities()
         scored_cities = []
         
@@ -246,6 +253,17 @@ class DPItineraryPlanner:
         
         for city_data in all_cities:
             city_name = city_data['name']
+            
+            # CRITICAL: If trip starts in Sardinia, ONLY consider Sardinian cities
+            # (no trains connect Sardinia to mainland - ferry only)
+            city_in_sardinia = city_name in sardinian_cities
+            
+            if start_in_sardinia and not city_in_sardinia:
+                # Skip mainland cities if starting from Sardinia
+                continue
+            elif not start_in_sardinia and city_in_sardinia:
+                # Skip Sardinian cities if starting from mainland
+                continue
             
             # Sempre includi start e end
             if city_name == start or city_name == end:
@@ -277,10 +295,36 @@ class DPItineraryPlanner:
                 c = 2 * asin(sqrt(a))
                 dist_from_end = 6371 * c
                 
-                # Bonus for cities along the route: penalize detours
-                # If dist_from_start + dist_from_end ≈ total_distance, city is on the path
-                detour = (dist_from_start + dist_from_end) - total_distance
-                route_bonus = max(0, 200 - (detour / 10))  # Max 200 bonus, -10 per km of detour
+                # Bonus for cities along the route based on reasonable travel
+                # PROXIMITY IS KING: Nearby cities strongly preferred, but big cities still attractive
+                
+                # For open trips (start == end), use distance from start only
+                if start == end:
+                    # Exponential proximity bonus - closer cities get MUCH more weight
+                    if dist_from_start < 100:
+                        route_bonus = 450  # Very close (within region) - MASSIVE boost
+                    elif dist_from_start < 200:
+                        route_bonus = 320  # Nearby regions - major boost
+                    elif dist_from_start < 350:
+                        route_bonus = 170  # Same-day reachable
+                    elif dist_from_start < 500:
+                        route_bonus = 50   # Long day trip
+                    elif dist_from_start < 700:
+                        route_bonus = 0    # Very far - no bonus
+                    else:
+                        route_bonus = -100  # Too far - strong penalty!
+                else:
+                    # For point-to-point trips: bonus for cities ON the route
+                    # If dist_from_start + dist_from_end ≈ total_distance, city is on path
+                    detour = (dist_from_start + dist_from_end) - total_distance
+                    if detour < 50:  # On the direct route
+                        route_bonus = 320
+                    elif detour < 150:  # Minor detour
+                        route_bonus = 200
+                    elif detour < 300:  # Moderate detour
+                        route_bonus = 100
+                    else:  # Major detour
+                        route_bonus = 0
                 
                 score += route_bonus
             
@@ -320,11 +364,15 @@ class DPItineraryPlanner:
         interests: List[str]
     ) -> float:
         """
-        Score provincia basato su attrazioni e interessi
+        Score provincia basato su attrazioni, interessi, e importanza città
+        Balanced scoring without proximity (handled separately)
         """
         attractions = city_data.get('attractions', [])
         if not attractions:
             return 0.0
+        
+        # City importance rating (1-10: major cities get higher score)
+        city_importance = city_data.get('importance', 5.0)
         
         # Conta attrazioni per categoria
         category_match = 0
@@ -344,11 +392,14 @@ class DPItineraryPlanner:
         avg_rating = total_rating / len(attractions)
         avg_popularity = total_popularity / len(attractions)
         
+        # Rebalanced formula: proximity matters MORE, importance gives "gravitational pull"
+        # City importance now gives smaller boost to allow smaller cities to compete
         score = (
-            category_match * 20 +  # Match interessi (increased weight)
-            len(attractions) * 0.3 +  # Numero attrazioni (reduced weight)
-            avg_rating * 2 +  # Qualità
-            avg_popularity * 0.5  # Popolarità (reduced weight)
+            category_match * 12 +  # Interest matching
+            len(attractions) * 0.4 +  # Number of attractions (slightly higher)
+            avg_rating * 2.5 +  # Quality (slightly higher)
+            avg_popularity * 0.6 +  # Popularity (slightly higher)
+            city_importance * 12  # Importance: 12-120 points (reduced from 18-180)
         )
         
         return score
@@ -566,6 +617,9 @@ class DPItineraryPlanner:
         """
         from math import radians, cos, sin, asin, sqrt
         
+        origin_name = origin_data.get('name', '')
+        dest_name = dest_data.get('name', '')
+        
         lat1 = origin_data['coordinates']['lat']
         lon1 = origin_data['coordinates']['lon']
         lat2 = dest_data['coordinates']['lat']
@@ -579,8 +633,52 @@ class DPItineraryPlanner:
         c = 2 * asin(sqrt(a))
         distance_km = 6371 * c
         
-        # Stima tempo: ~100 km/h + buffer
-        estimated_hours = (distance_km / 100) + 0.5
+        # Special handling for island routes
+        sicilian_cities = {'Palermo', 'Catania', 'Messina', 'Siracusa', 'Agrigento', 'Trapani', 'Ragusa', 'Enna', 'Caltanissetta'}
+        sardinian_cities = {'Cagliari', 'Sassari', 'Nuoro', 'Oristano'}
+        mainland_cities = {'Roma', 'Milano', 'Napoli', 'Firenze', 'Torino', 'Bologna', 'Venezia', 'Genova', 'Verona'}
+        
+        # Sardinia: NO TRAIN SERVICE to mainland (ferry only - not supported)
+        is_sardinia_crossing = (
+            (origin_name in sardinian_cities and dest_name not in sardinian_cities) or
+            (origin_name not in sardinian_cities and dest_name in sardinian_cities)
+        )
+        
+        if is_sardinia_crossing:
+            # Block completely - return impossibly high cost
+            return {
+                'train': None,
+                'exists': False,
+                'travel_time': 999.0,
+                'price': 999999.0,
+                'numero_treno': 'NO_SERVICE',
+                'estimated': True
+            }
+        
+        is_sicily_crossing = (
+            (origin_name in sicilian_cities and dest_name in mainland_cities) or
+            (origin_name in mainland_cities and dest_name in sicilian_cities)
+        )
+        
+        # Stima tempo: velocità variabile basata su distanza
+        # Treni regionali: ~80 km/h, IC: ~120 km/h, AV: ~180 km/h
+        # Usa velocità conservativa per evitare sottostime
+        if is_sicily_crossing:
+            # Sicily-mainland: add ferry time + slower route
+            avg_speed = 60  # Very slow due to ferry and connections
+            estimated_hours = (distance_km / avg_speed) + 3.0  # +3h for ferry and transfers
+        elif distance_km < 100:
+            # Short distance - regional trains
+            avg_speed = 80
+            estimated_hours = (distance_km / avg_speed) + 0.5
+        elif distance_km < 300:
+            # Medium distance - intercity
+            avg_speed = 100
+            estimated_hours = (distance_km / avg_speed) + 0.8
+        else:
+            # Long distance - may require connections or slower routes
+            avg_speed = 85  # Much slower for very long routes
+            estimated_hours = (distance_km / avg_speed) + 1.5
         
         return {
             'train': None,
@@ -633,6 +731,7 @@ class DPItineraryPlanner:
         # Inizializzazione
         dp = [{} for _ in range(num_days + 1)]
         prev = [{} for _ in range(num_days + 1)]
+        visited_cities = [{} for _ in range(num_days + 1)]  # Track cities visited up to day d
         consecutive_days = [{} for _ in range(num_days + 1)]  # Track consecutive days in same city
         
         # dp[0][start] = score(start)
@@ -642,6 +741,7 @@ class DPItineraryPlanner:
         )
         dp[1][start] = start_score
         prev[1][start] = None
+        visited_cities[1][start] = {start}  # Start city is visited
         consecutive_days[1][start] = 1
         
         print(f"  Inizializzazione: dp[1][{start}] = {start_score:.2f}")
@@ -654,6 +754,11 @@ class DPItineraryPlanner:
                 city_scores[city] = self._calculate_province_score(city_data, interests)
             else:
                 city_scores[city] = 0.0
+        
+        # Calculate how many unique cities we can realistically visit
+        # If num_days > candidates, we MUST have 2-day stays
+        max_unique_cities = len(candidates)
+        need_multi_day_stays = num_days > max_unique_cities
         
         # DP: giorni 1 -> N
         for d in range(1, num_days):
@@ -672,26 +777,75 @@ class DPItineraryPlanner:
                 # Check how many consecutive days we've been in city A
                 days_in_A = consecutive_days[d].get(A, 1)
                 
+                # Calculate remaining days after this move
+                days_remaining = num_days - d
+                cities_visited_count = len(visited_cities[d].get(A, {A}))
+                cities_not_visited = max_unique_cities - cities_visited_count
+                
+                # Need 2-day stays if: remaining_days > cities_not_visited
+                # This means we have more days left than unique cities available
+                should_encourage_stays = days_remaining > cities_not_visited
+                
                 # Option 1: STAY in same city A for another day
-                # Only allow if not already at MAX_DAYS_PER_CITY limit
-                if days_in_A < self.MAX_DAYS_PER_CITY:
+                # Allow for cities with importance >= 7 (not just 8) when we need to fill days
+                A_data = self.city_db.get_city_by_name(A)
+                A_importance = A_data.get('importance', 5.0) if A_data else 5.0
+                
+                # Dynamic threshold: lower it when we need multi-day stays to fill itinerary
+                # For small island regions (like Sardinia), we MUST allow stays even in smaller cities
+                if need_multi_day_stays:
+                    # If days > cities, we absolutely NEED multi-day stays
+                    # Allow ANY city to have 2-day stays (importance >= 4.0)
+                    importance_threshold = 4.0
+                elif should_encourage_stays:
+                    # If running out of cities, be flexible
+                    importance_threshold = 6.0
+                else:
+                    # Normal case: only major cities get 2-day stays
+                    importance_threshold = 8.0
+                    
+                is_major_city = A_importance >= importance_threshold
+                
+                # Calculate maximum days we can stay in one city
+                # If we have more days than cities, we MUST allow 2+ day stays
+                max_stay_days = 2  # Default: max 2 days per city
+                if need_multi_day_stays:
+                    # For islands like Sardinia: allow staying up to 3 days if needed
+                    max_stay_days = 3
+                
+                if is_major_city and days_in_A < max_stay_days:
                     stay_reward = city_scores.get(A, 0.0) * 0.7
-                    stay_bonus = 30
+                    
+                    # Bonus increases when we need stays to fill the itinerary
+                    if should_encourage_stays:
+                        stay_bonus = 50  # Higher bonus when we need to fill days
+                    else:
+                        stay_bonus = 30  # Normal bonus
+                    
                     stay_score = dp[d][A] + stay_reward + stay_bonus
                     
                     if A not in dp[next_day] or stay_score > dp[next_day][A]:
                         dp[next_day][A] = stay_score
                         prev[next_day][A] = A  # Same city
+                        visited_cities[next_day][A] = visited_cities[d][A].copy()  # Same visited set
                         consecutive_days[next_day][A] = days_in_A + 1
-                        print(f"    {A} -> {A} (stay day {days_in_A + 1}): score={stay_score:.2f}")
+                        reason = "[NEED STAYS]" if should_encourage_stays else "[MAJOR CITY]"
+                        print(f"    {A} -> {A} (stay day {days_in_A + 1}): score={stay_score:.2f} {reason}")
+                elif not is_major_city:
+                    print(f"    {A} -> {A} (stay): BLOCKED - not major enough (importance={A_importance:.1f}, need>={importance_threshold:.1f})")
                 else:
-                    print(f"    {A} -> {A} (stay): BLOCKED - already {days_in_A} days")
+                    print(f"    {A} -> {A} (stay): BLOCKED - already {days_in_A} days (max={max_stay_days})")
                 
                 # Option 2: MOVE to different city B
                 # Prova tutte le destinazioni B
                 for B in candidates:
                     if B == A:
                         continue
+                    
+                    # CRITICAL: Prevent revisiting cities already in the route
+                    cities_visited_so_far = visited_cities[d].get(A, set())
+                    if B in cities_visited_so_far:
+                        continue  # Skip - already visited this city
                     
                     # Controlla se esiste treno A -> B per giorno next_day
                     if next_day not in train_matrix:
@@ -719,8 +873,15 @@ class DPItineraryPlanner:
                     # For multi-day trips, visiting more cities is generally better
                     exploration_bonus = 50  # Bonus for each new city visited
                     
-                    # Travel penalty (light - we want to encourage exploration)
-                    travel_penalty = travel_time * 5  # Increased from 2 to make long travels slightly more expensive
+                    # Travel penalty: scale exponentially for very long trips
+                    # Short trips (<3h): light penalty
+                    # Long trips (>5h): heavy penalty to discourage cross-country journeys
+                    if travel_time < 3:
+                        travel_penalty = travel_time * 5
+                    elif travel_time < 5:
+                        travel_penalty = travel_time * 10  # Moderate penalty
+                    else:
+                        travel_penalty = travel_time * 20  # Heavy penalty for very long trains
                     
                     # Update DP
                     new_score = dp[d][A] + reward_B + exploration_bonus - travel_penalty
@@ -728,28 +889,82 @@ class DPItineraryPlanner:
                     if B not in dp[next_day] or new_score > dp[next_day][B]:
                         dp[next_day][B] = new_score
                         prev[next_day][B] = A
+                        # Add B to visited cities
+                        new_visited = cities_visited_so_far.copy()
+                        new_visited.add(B)
+                        visited_cities[next_day][B] = new_visited
                         consecutive_days[next_day][B] = 1  # Reset to 1 when moving to new city
                         print(f"    {A} -> {B}: score={new_score:.2f} (travel={travel_time:.1f}h)")
         
         # Backtrack: trova percorso migliore che arriva a 'end'
         # IMPORTANT: For best experience, prefer using ALL available days
-        # Only look at day num_days first, then fall back to earlier days
+        # For open-ended trips (start == end), prefer ending at a DIFFERENT city
         best_day = -1
         best_score = float('-inf')
+        best_end_city = end
         
-        # First, try to find path that uses all days
-        if end in dp[num_days]:
-            best_day = num_days
-            best_score = dp[num_days][end]
-            print(f"  ✅ Found route using all {num_days} days")
+        # Check if this is an open-ended trip (round trip)
+        is_round_trip = (start == end)
+        
+        if is_round_trip:
+            # For round trips, prefer ending at ANY city except start
+            print(f"  🔄 Round trip detected - seeking diverse route (avoid returning to {start})")
+            
+            # CRITICAL: Must use ALL requested days
+            # Find best city to end at on the FINAL day (excluding start city)
+            for city in candidates:
+                if city == start:
+                    continue  # Skip start city
+                
+                if city in dp[num_days]:
+                    score = dp[num_days][city]
+                    if score > best_score:
+                        best_score = score
+                        best_day = num_days
+                        best_end_city = city
+            
+            if best_day == num_days:
+                print(f"  ✅ Found open route using ALL {num_days} days, ending at {best_end_city} (score: {best_score:.2f})")
+            else:
+                # ONLY fallback if absolutely no route found for final day
+                # This should be very rare with our improved stay logic
+                print(f"  ⚠️  WARNING: Could not fill all {num_days} days - checking earlier days...")
+                for d in range(num_days - 1, 0, -1):
+                    if not dp[d]:
+                        continue
+                    for city in candidates:
+                        if city == start:
+                            continue
+                        if city in dp[d] and dp[d][city] > best_score:
+                            best_score = dp[d][city]
+                            best_day = d
+                            best_end_city = city
+                
+                if best_day != -1:
+                    print(f"  ⚠️  FALLBACK: Open route ends at {best_end_city} on day {best_day} (requested {num_days})")
+                    print(f"  ℹ️  Consider requesting fewer days or selecting a different start city")
         else:
-            # Fall back to shorter routes
-            for d in range(num_days - 1, 0, -1):
-                if end in dp[d] and dp[d][end] > best_score:
-                    best_score = dp[d][end]
-                    best_day = d
-            if best_day > 0:
-                print(f"  ⚠️  Could only find route using {best_day} days (requested {num_days})")
+            # Fixed destination: MUST use all requested days
+            # First, try to find path that uses all days to reach end city
+            if end in dp[num_days]:
+                best_day = num_days
+                best_score = dp[num_days][end]
+                best_end_city = end
+                print(f"  ✅ Found route using all {num_days} days to reach {end}")
+            else:
+                # ONLY fallback if absolutely no route found
+                print(f"  ⚠️  WARNING: Could not reach {end} in {num_days} days - checking earlier arrivals...")
+                for d in range(num_days - 1, 0, -1):
+                    if end in dp[d] and dp[d][end] > best_score:
+                        best_score = dp[d][end]
+                        best_day = d
+                        best_end_city = end
+                if best_day > 0:
+                    print(f"  ⚠️  FALLBACK: Could only reach {end} in {best_day} days (requested {num_days})")
+                    print(f"  ℹ️  Consider requesting fewer days or selecting intermediate destinations")
+        
+        # Update end to actual ending city
+        end = best_end_city
         
         if best_day == -1:
             print("=" * 80, flush=True)

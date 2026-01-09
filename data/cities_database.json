@@ -431,7 +431,8 @@
           "lat": 45.4724593,
           "lon": 9.2008641
         }
-      ]
+      ],
+      "importance": 9
     },
     {
       "id": "bergamo",
@@ -844,7 +845,8 @@
           "lat": 45.752717,
           "lon": 9.6604386
         }
-      ]
+      ],
+      "importance": 6
     },
     {
       "id": "brescia",
@@ -1100,7 +1102,8 @@
           "lat": 45.810216,
           "lon": 10.5123565
         }
-      ]
+      ],
+      "importance": 6
     },
     {
       "id": "como",
@@ -1513,7 +1516,8 @@
           "lat": 45.8335194,
           "lon": 9.2126699
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "cremona",
@@ -1822,7 +1826,8 @@
           "lat": 45.1925153,
           "lon": 9.8685451
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "lecco",
@@ -2235,7 +2240,8 @@
           "lat": 45.8360848,
           "lon": 9.3326711
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "lodi",
@@ -2648,7 +2654,8 @@
           "lat": 45.3020379,
           "lon": 9.6538112
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "mantova",
@@ -3061,7 +3068,8 @@
           "lat": 45.1608368,
           "lon": 10.7890713
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "monza",
@@ -3081,7 +3089,8 @@
       "tags": [],
       "description": "Città di Monza, Lombardia",
       "min_stay_days": 1.0,
-      "attractions": []
+      "attractions": [],
+      "importance": 5.0
     },
     {
       "id": "pavia",
@@ -3493,7 +3502,8 @@
           "lat": 44.9958672,
           "lon": 9.086668
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "sondrio",
@@ -3699,7 +3709,8 @@
           "lat": 46.382934,
           "lon": 10.3246979
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "varese",
@@ -4112,7 +4123,8 @@
           "lat": 45.7556071,
           "lon": 8.8660856
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "torino",
@@ -4525,7 +4537,8 @@
           "lat": 45.0635001,
           "lon": 7.6806196
         }
-      ]
+      ],
+      "importance": 9
     },
     {
       "id": "alessandria",
@@ -4940,7 +4953,8 @@
           "lat": 44.7557069,
           "lon": 8.8506715
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "asti",
@@ -4960,7 +4974,8 @@
       "tags": [],
       "description": "Città di Asti, Piemonte",
       "min_stay_days": 1.0,
-      "attractions": []
+      "attractions": [],
+      "importance": 5.0
     },
     {
       "id": "biella",
@@ -5373,7 +5388,8 @@
           "lat": 45.5465582,
           "lon": 8.113408
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "cuneo",
@@ -5787,7 +5803,8 @@
           "lat": 44.4014959,
           "lon": 7.6865042
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "novara",
@@ -6200,7 +6217,8 @@
           "lat": 45.6952751,
           "lon": 8.5343468
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "verbania",
@@ -6614,7 +6632,8 @@
           "lat": 45.981997,
           "lon": 8.3955284
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "vercelli",
@@ -6634,7 +6653,8 @@
       "tags": [],
       "description": "Città di Vercelli, Piemonte",
       "min_stay_days": 1.0,
-      "attractions": []
+      "attractions": [],
+      "importance": 5.0
     },
     {
       "id": "genova",
@@ -7047,7 +7067,8 @@
           "lat": 44.4305032,
           "lon": 8.8168566
         }
-      ]
+      ],
+      "importance": 8
     },
     {
       "id": "imperia",
@@ -7461,7 +7482,8 @@
           "lat": 44.0093754,
           "lon": 8.0155151
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "la_spezia",
@@ -7875,7 +7897,8 @@
           "lat": 44.2827113,
           "lon": 9.5996181
         }
-      ]
+      ],
+      "importance": 6
     },
     {
       "id": "savona",
@@ -8288,12 +8311,13 @@
           "lat": 44.1362816,
           "lon": 8.2027934
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "aosta",
       "name": "Aosta",
-      "region": "Unknown",
+      "region": "Valle d'Aosta",
       "station_code": "S95677",
       "station_name": "Stazione, Saint-Marcel, Valle d'Aosta / Vallée d'Aoste, Italia",
       "coordinates": {
@@ -8308,7 +8332,7 @@
         "cultura"
       ],
       "tags": [],
-      "description": "Città di Aosta, Unknown",
+      "description": "Città di Aosta, Valle d'Aosta",
       "min_stay_days": 1.0,
       "attractions": [
         {
@@ -8702,7 +8726,8 @@
           "lat": 45.7380456,
           "lon": 7.3233232
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "venezia",
@@ -9115,7 +9140,8 @@
           "lat": 45.4330292,
           "lon": 12.33154
         }
-      ]
+      ],
+      "importance": 10
     },
     {
       "id": "belluno",
@@ -9422,7 +9448,8 @@
           "lat": 46.2005393,
           "lon": 12.2011075
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "padova",
@@ -9835,7 +9862,8 @@
           "lat": 45.4056547,
           "lon": 11.879923
         }
-      ]
+      ],
+      "importance": 7
     },
     {
       "id": "rovigo",
@@ -10209,7 +10237,8 @@
           "lat": 44.9229069,
           "lon": 12.2289602
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "treviso",
@@ -10622,7 +10651,8 @@
           "lat": 45.7772928,
           "lon": 12.0521406
         }
-      ]
+      ],
+      "importance": 6
     },
     {
       "id": "verona",
@@ -11036,7 +11066,8 @@
           "lat": 45.4286277,
           "lon": 10.9538052
         }
-      ]
+      ],
+      "importance": 8
     },
     {
       "id": "vicenza",
@@ -11449,7 +11480,8 @@
           "lat": 45.704763,
           "lon": 11.3417617
         }
-      ]
+      ],
+      "importance": 6
     },
     {
       "id": "trieste",
@@ -11469,7 +11501,8 @@
       "tags": [],
       "description": "Città di Trieste, Friuli-Venezia Giulia",
       "min_stay_days": 1.0,
-      "attractions": []
+      "attractions": [],
+      "importance": 7
     },
     {
       "id": "gorizia",
@@ -11883,7 +11916,8 @@
           "lat": 45.9426509,
           "lon": 13.7321856
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "pordenone",
@@ -12297,7 +12331,8 @@
           "lat": 45.8540727,
           "lon": 12.5383296
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "udine",
@@ -12710,12 +12745,13 @@
           "lat": 46.0556217,
           "lon": 13.2301202
         }
-      ]
+      ],
+      "importance": 6
     },
     {
       "id": "trento",
       "name": "Trento",
-      "region": "Unknown",
+      "region": "Trentino-Alto Adige",
       "station_code": "S22119",
       "station_name": "Trento, Piazza Dante, Centro storico, Centro Storico - Piedicastello, Vela, Trento, Territorio Val d'Adige, Provincia di Trento, Trentino-Alto Adige/Südtirol, 38122, Italia",
       "coordinates": {
@@ -12728,14 +12764,15 @@
         "storia"
       ],
       "tags": [],
-      "description": "Città di Trento, Unknown",
+      "description": "Città di Trento, Trentino-Alto Adige",
       "min_stay_days": 1.0,
-      "attractions": []
+      "attractions": [],
+      "importance": 6
     },
     {
       "id": "bolzano",
       "name": "Bolzano",
-      "region": "Unknown",
+      "region": "Trentino-Alto Adige",
       "station_code": "S19959",
       "station_name": "Stazione Bolzano, Via Nazionale, Catona, Reggio di Calabria, Reggio Calabria, Calabria, 89135, Italia",
       "coordinates": {
@@ -12750,7 +12787,7 @@
         "cultura"
       ],
       "tags": [],
-      "description": "Città di Bolzano, Unknown",
+      "description": "Città di Bolzano, Trentino-Alto Adige",
       "min_stay_days": 1.0,
       "attractions": [
         {
@@ -13143,7 +13180,8 @@
           "lat": 46.5760695,
           "lon": 11.2188219
         }
-      ]
+      ],
+      "importance": 6
     },
     {
       "id": "bologna",
@@ -13558,7 +13596,8 @@
           "lat": 44.5024744,
           "lon": 11.3334278
         }
-      ]
+      ],
+      "importance": 8
     },
     {
       "id": "ferrara",
@@ -13971,7 +14010,8 @@
           "lat": 44.7439263,
           "lon": 11.9692823
         }
-      ]
+      ],
+      "importance": 7
     },
     {
       "id": "forlì",
@@ -14385,7 +14425,8 @@
           "lat": 44.2865997,
           "lon": 11.8840644
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "modena",
@@ -14799,7 +14840,8 @@
           "lat": 44.4519624,
           "lon": 11.0438159
         }
-      ]
+      ],
+      "importance": 7
     },
     {
       "id": "parma",
@@ -15217,7 +15259,8 @@
           "lat": 44.8128996,
           "lon": 10.1732387
         }
-      ]
+      ],
+      "importance": 7
     },
     {
       "id": "piacenza",
@@ -15564,7 +15607,8 @@
           "lat": 44.9354821,
           "lon": 9.672568
         }
-      ]
+      ],
+      "importance": 6
     },
     {
       "id": "ravenna",
@@ -15977,7 +16021,8 @@
           "lat": 44.4198924,
           "lon": 11.8991806
         }
-      ]
+      ],
+      "importance": 7
     },
     {
       "id": "reggio_emilia",
@@ -16390,7 +16435,8 @@
           "lat": 44.7094235,
           "lon": 10.6223903
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "rimini",
@@ -16803,7 +16849,8 @@
           "lat": 44.0721357,
           "lon": 12.5780194
         }
-      ]
+      ],
+      "importance": 6
     },
     {
       "id": "firenze",
@@ -17216,7 +17263,8 @@
           "lat": 43.7642641,
           "lon": 11.2561926
         }
-      ]
+      ],
+      "importance": 10
     },
     {
       "id": "arezzo",
@@ -17236,7 +17284,8 @@
       "tags": [],
       "description": "Città di Arezzo, Toscana",
       "min_stay_days": 1.0,
-      "attractions": []
+      "attractions": [],
+      "importance": 5.0
     },
     {
       "id": "grosseto",
@@ -17652,7 +17701,8 @@
           "lat": 42.7815443,
           "lon": 11.1902289
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "livorno",
@@ -18066,7 +18116,8 @@
           "lat": 42.8161361,
           "lon": 10.4278283
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "lucca",
@@ -18479,7 +18530,8 @@
           "lat": 44.0409258,
           "lon": 10.4027859
         }
-      ]
+      ],
+      "importance": 7
     },
     {
       "id": "massa",
@@ -18892,7 +18944,8 @@
           "lat": 44.0113331,
           "lon": 10.3223856
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "pisa",
@@ -19304,7 +19357,8 @@
           "lat": 43.4990763,
           "lon": 10.6160219
         }
-      ]
+      ],
+      "importance": 8
     },
     {
       "id": "pistoia",
@@ -19717,7 +19771,8 @@
           "lat": 43.9337677,
           "lon": 10.9186961
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "prato",
@@ -19737,7 +19792,8 @@
       "tags": [],
       "description": "Città di Prato, Toscana",
       "min_stay_days": 1.0,
-      "attractions": []
+      "attractions": [],
+      "importance": 5.0
     },
     {
       "id": "siena",
@@ -19891,7 +19947,8 @@
           "lat": 43.1674737,
           "lon": 11.3944243
         }
-      ]
+      ],
+      "importance": 8
     },
     {
       "id": "perugia",
@@ -20303,7 +20360,8 @@
           "lat": 43.1069518,
           "lon": 12.391587
         }
-      ]
+      ],
+      "importance": 7
     },
     {
       "id": "terni",
@@ -20716,7 +20774,8 @@
           "lat": 42.555635,
           "lon": 12.4166335
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "ancona",
@@ -21129,7 +21188,8 @@
           "lat": 43.4454529,
           "lon": 13.1171872
         }
-      ]
+      ],
+      "importance": 7
     },
     {
       "id": "ascoli_piceno",
@@ -21543,7 +21603,8 @@
           "lat": 42.8326782,
           "lon": 13.6355165
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "fermo",
@@ -21956,7 +22017,8 @@
           "lat": 43.0507369,
           "lon": 13.7969095
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "macerata",
@@ -22368,7 +22430,8 @@
           "lat": 43.1927794,
           "lon": 13.1211734
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "pesaro",
@@ -22741,7 +22804,8 @@
           "lat": 43.9419511,
           "lon": 12.7735788
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "roma",
@@ -23154,7 +23218,8 @@
           "lat": 41.909077,
           "lon": 12.488319
         }
-      ]
+      ],
+      "importance": 10
     },
     {
       "id": "frosinone",
@@ -23567,7 +23632,8 @@
           "lat": 41.6115117,
           "lon": 13.5894958
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "latina",
@@ -23980,7 +24046,8 @@
           "lat": 41.58921,
           "lon": 13.0394957
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "rieti",
@@ -24395,7 +24462,8 @@
           "lat": 42.5014743,
           "lon": 12.8880285
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "viterbo",
@@ -24807,7 +24875,8 @@
           "lat": 42.5844728,
           "lon": 11.8574499
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "laquila",
@@ -24827,7 +24896,8 @@
       "tags": [],
       "description": "Città di L'Aquila, Abruzzo",
       "min_stay_days": 1.0,
-      "attractions": []
+      "attractions": [],
+      "importance": 5.0
     },
     {
       "id": "chieti",
@@ -24847,7 +24917,8 @@
       "tags": [],
       "description": "Città di Chieti, Abruzzo",
       "min_stay_days": 1.0,
-      "attractions": []
+      "attractions": [],
+      "importance": 5.0
     },
     {
       "id": "pescara",
@@ -24867,7 +24938,8 @@
       "tags": [],
       "description": "Città di Pescara, Abruzzo",
       "min_stay_days": 1.0,
-      "attractions": []
+      "attractions": [],
+      "importance": 5.0
     },
     {
       "id": "teramo",
@@ -25280,7 +25352,8 @@
           "lat": 42.6608816,
           "lon": 13.6973346
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "campobasso",
@@ -25588,7 +25661,8 @@
           "lat": 41.7048091,
           "lon": 14.9350622
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "isernia",
@@ -25923,7 +25997,8 @@
           "lat": 41.6161016,
           "lon": 14.0575016
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "napoli",
@@ -26336,7 +26411,8 @@
           "lat": 40.8260906,
           "lon": 14.1710184
         }
-      ]
+      ],
+      "importance": 9
     },
     {
       "id": "avellino",
@@ -26750,7 +26826,8 @@
           "lat": 41.0742257,
           "lon": 15.2026516
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "benevento",
@@ -27164,7 +27241,8 @@
           "lat": 41.2023185,
           "lon": 14.8520592
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "caserta",
@@ -27577,7 +27655,8 @@
           "lat": 41.2524918,
           "lon": 14.1806727
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "salerno",
@@ -27990,7 +28069,8 @@
           "lat": 40.3342016,
           "lon": 15.3356626
         }
-      ]
+      ],
+      "importance": 6
     },
     {
       "id": "bari",
@@ -28404,7 +28484,8 @@
           "lat": 41.093328,
           "lon": 16.7526491
         }
-      ]
+      ],
+      "importance": 7
     },
     {
       "id": "barletta",
@@ -28424,7 +28505,8 @@
       "tags": [],
       "description": "Città di Barletta, Puglia",
       "min_stay_days": 1.0,
-      "attractions": []
+      "attractions": [],
+      "importance": 5.0
     },
     {
       "id": "brindisi",
@@ -28838,7 +28920,8 @@
           "lat": 40.6083534,
           "lon": 17.6496752
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "foggia",
@@ -29160,7 +29243,8 @@
           "lat": 41.460039,
           "lon": 15.5539789
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "lecce",
@@ -29572,7 +29656,8 @@
           "lat": 40.1377785,
           "lon": 18.3906118
         }
-      ]
+      ],
+      "importance": 7
     },
     {
       "id": "taranto",
@@ -29592,7 +29677,8 @@
       "tags": [],
       "description": "Città di Taranto, Puglia",
       "min_stay_days": 1.0,
-      "attractions": []
+      "attractions": [],
+      "importance": 6
     },
     {
       "id": "potenza",
@@ -29612,7 +29698,8 @@
       "tags": [],
       "description": "Città di Potenza, Basilicata",
       "min_stay_days": 1.0,
-      "attractions": []
+      "attractions": [],
+      "importance": 5.0
     },
     {
       "id": "matera",
@@ -29764,7 +29851,8 @@
           "lat": 40.5695336,
           "lon": 16.5010545
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "catanzaro",
@@ -30125,7 +30213,8 @@
           "lat": 38.7236694,
           "lon": 16.4928555
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "cosenza",
@@ -30329,7 +30418,8 @@
           "lat": 39.5069088,
           "lon": 16.2853294
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "crotone",
@@ -30586,7 +30676,8 @@
           "lat": 39.146875,
           "lon": 16.914304
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "reggio_calabria",
@@ -31000,7 +31091,8 @@
           "lat": 38.1920828,
           "lon": 15.5555446
         }
-      ]
+      ],
+      "importance": 6
     },
     {
       "id": "vibo_valentia",
@@ -31387,7 +31479,8 @@
           "lat": 38.7267447,
           "lon": 16.029663
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "palermo",
@@ -31800,7 +31893,8 @@
           "lat": 38.1066071,
           "lon": 13.5133314
         }
-      ]
+      ],
+      "importance": 8
     },
     {
       "id": "agrigento",
@@ -32213,7 +32307,8 @@
           "lat": 37.3133655,
           "lon": 13.6584091
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "caltanissetta",
@@ -32366,7 +32461,8 @@
           "lat": 37.518407,
           "lon": 13.9251805
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "catania",
@@ -32780,7 +32876,8 @@
           "lat": 37.5617762,
           "lon": 15.1660924
         }
-      ]
+      ],
+      "importance": 7
     },
     {
       "id": "enna",
@@ -33115,7 +33212,8 @@
           "lat": 37.6113956,
           "lon": 14.2256872
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "messina",
@@ -33529,7 +33627,8 @@
           "lat": 38.1081429,
           "lon": 15.6467796
         }
-      ]
+      ],
+      "importance": 6
     },
     {
       "id": "ragusa",
@@ -33941,7 +34040,8 @@
           "lat": 36.8456667,
           "lon": 14.8459648
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "siracusa",
@@ -34353,7 +34453,8 @@
           "lat": 37.0202369,
           "lon": 15.2568977
         }
-      ]
+      ],
+      "importance": 6
     },
     {
       "id": "trapani",
@@ -34557,12 +34658,13 @@
           "lat": 38.0162292,
           "lon": 12.5130794
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "cagliari",
       "name": "Cagliari",
-      "region": "Unknown",
+      "region": "Sardegna",
       "station_code": "S35168",
       "station_name": "Stazione, Via Roma, Stampaxi/Stampace, Casteddu/Cagliari, Sardigna/Sardegna, 09123, Italia",
       "coordinates": {
@@ -34577,7 +34679,7 @@
         "cultura"
       ],
       "tags": [],
-      "description": "Città di Cagliari, Unknown",
+      "description": "Città di Cagliari, Sardegna",
       "min_stay_days": 1.0,
       "attractions": [
         {
@@ -34970,12 +35072,13 @@
           "lat": 39.2278681,
           "lon": 9.0998905
         }
-      ]
+      ],
+      "importance": 6
     },
     {
       "id": "nuoro",
       "name": "Nuoro",
-      "region": "Unknown",
+      "region": "Sardegna",
       "station_code": "S88185",
       "station_name": "Stazione Nuoro, 10, Piazza Enrico Berlinguer, Istiritta, Nùgoro/Nuoro, Nuoro, Sardigna/Sardegna, 08100, Italia",
       "coordinates": {
@@ -34989,7 +35092,7 @@
         "cultura"
       ],
       "tags": [],
-      "description": "Città di Nuoro, Unknown",
+      "description": "Città di Nuoro, Sardegna",
       "min_stay_days": 1.0,
       "attractions": [
         {
@@ -35304,12 +35407,13 @@
           "lat": 40.2176579,
           "lon": 9.2854094
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "oristano",
       "name": "Oristano",
-      "region": "Unknown",
+      "region": "Sardegna",
       "station_code": "S95581",
       "station_name": "Stazione di Abbasanta, Piazza Stazione, Abbasanta, Aristanis/Oristano, Sardigna/Sardegna, 09071, Italia",
       "coordinates": {
@@ -35323,7 +35427,7 @@
         "cultura"
       ],
       "tags": [],
-      "description": "Città di Oristano, Unknown",
+      "description": "Città di Oristano, Sardegna",
       "min_stay_days": 1.0,
       "attractions": [
         {
@@ -35717,12 +35821,13 @@
           "lat": 40.0600099,
           "lon": 8.7288417
         }
-      ]
+      ],
+      "importance": 5.0
     },
     {
       "id": "sassari",
       "name": "Sassari",
-      "region": "Unknown",
+      "region": "Sardegna",
       "station_code": "S51625",
       "station_name": "ex Stazione di Mamuntanas, Strada Vicinale Figuruja, l'Alguer/Alghero, Sassari, Sardigna/Sardegna, Italia",
       "coordinates": {
@@ -35736,7 +35841,7 @@
         "cultura"
       ],
       "tags": [],
-      "description": "Città di Sassari, Unknown",
+      "description": "Città di Sassari, Sardegna",
       "min_stay_days": 1.0,
       "attractions": [
         {
@@ -36129,7 +36234,8 @@
           "lat": 40.7574979,
           "lon": 8.4489093
         }
-      ]
+      ],
+      "importance": 5.0
     }
   ]
 }
