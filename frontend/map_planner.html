@@ -986,7 +986,7 @@
                                 </div>
                             </div>
                             
-                            <!-- 🌅 MORNING: Treno (se presente) - INIZIO GIORNATA -->
+                            <!-- 🌅 MORNING: Treno (se presente) - START DAY -->
                             ${day.morning_train && day.from_city ? `
                                 <div style="margin-bottom: 25px;">
                                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
@@ -995,6 +995,11 @@
                                         </div>
                                     </div>
                                     <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-left: 5px solid #f59e0b; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.2); position: relative;">
+                                        ${(day.morning_train.estimated === true || !day.morning_train.numero_treno || day.morning_train.numero_treno === 'ESTIMATED') ? `
+                                            <div style="position: absolute; top: 12px; right: 12px; background: rgba(146, 64, 14, 0.12); color: #92400e; border: 1px solid rgba(146, 64, 14, 0.35); padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: 0.5px;">
+                                                ESTIMATED
+                                            </div>
+                                        ` : ''}
                                         <div style="display: flex; align-items: center; gap: 15px;">
                                             <div style="font-size: 36px;">🚂</div>
                                             <div style="flex: 1;">
