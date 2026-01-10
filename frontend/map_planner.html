@@ -721,9 +721,13 @@
                 });
                 
                 // Mostra stima tempo
-                const minutes = Math.ceil(estimatedSeconds / 60);
-                document.getElementById('timeEstimate').textContent = 
-                    `⏱️ Estimated time: ${minutes} minut${minutes > 1 ? 'es' : 'e'} (~${Math.round(estimatedSeconds)}s)`;
+                const minMinutes = Math.max(1, Math.floor(estimatedSeconds / 60));
+                const maxMinutes = Math.max(minMinutes, Math.ceil(estimatedSeconds / 60));
+                const minutesText = (minMinutes === maxMinutes)
+                    ? `${minMinutes} minute${minMinutes > 1 ? 's' : ''}`
+                    : `${minMinutes}-${maxMinutes} minutes`;
+                document.getElementById('timeEstimate').textContent =
+                    `⏱️ Estimated time: ${minutesText} (~${Math.round(estimatedSeconds)}s)`;
                 
                 // Simula progress con steps
                 let progress = 0;
