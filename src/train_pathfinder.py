@@ -44,6 +44,10 @@ class TrainPathfinder:
         3. Per ogni treno, controlla se va a destinazione o a stazioni intermedie utili
         4. Costruisci percorso con cambi se necessario
         
+        WORKAROUND DATE: L'API Trenitalia restituisce dati solo per oggi.
+        Se la data è futura, usa l'anno precedente (stesso giorno/mese).
+        Gli orari ferroviari cambiano poco anno dopo anno.
+        
         Returns:
             {
                 'train': dettagli percorso completo,
@@ -64,13 +68,27 @@ class TrainPathfinder:
         if not origin_station or not dest_station:
             return None
         
+        # WORKAROUND: API funziona solo per oggi ± 1-2 giorni
+        # Per date future/passate, usa OGGI per ottenere orari tipici
+        today = datetime.now().date()
+        query_date = departure_time
+        
+        if abs((departure_time.date() - today).days) > 1:
+            # Data troppo lontana -> usa oggi con stesso orario
+            query_date = departure_time.replace(
+                year=today.year,
+                month=today.month,
+                day=today.day
+            )
+            print(f"    ⚠️  Data {departure_time.date()} fuori range API -> uso OGGI {query_date.date()}")
+        
         print(f"    🔍 Ricerca percorso {origin_city} -> {dest_city}")
         
         # 2. BFS per trovare percorso ottimale
         best_route = self._bfs_search(
             origin_station,
             dest_station,
-            departure_time,
+            query_date,
             start_time
         )
         
@@ -87,7 +105,9 @@ class TrainPathfinder:
             return self.station_cache[city_name]
         
         # Mappa città -> nome stazione principale (hardcoded per affidabilità)
+        # Include le 106 città italiane più comuni
         station_names = {
+            # Grandi città
             "Milano": "MILANO CENTRALE",
             "Roma": "ROMA TERMINI",
             "Torino": "TORINO PORTA NUOVA",
@@ -111,18 +131,155 @@ class TrainPathfinder:
             "Lecce": "LECCE",
             "Siracusa": "SIRACUSA",
             "Salerno": "SALERNO",
-            "Perugia": "PERUGIA"
+            "Perugia": "PERUGIA",
+            
+            # Toscana
+            "Pisa": "PISA CENTRALE",
+            "Livorno": "LIVORNO CENTRALE",
+            "Lucca": "LUCCA",
+            "Pistoia": "PISTOIA",
+            "Arezzo": "AREZZO",
+            "Grosseto": "GROSSETO",
+            "Siena": "SIENA",
+            "Prato": "PRATO CENTRALE",
+            "Massa": "MASSA CENTRO",
+            
+            # Emilia Romagna
+            "Ravenna": "RAVENNA",
+            "Ferrara": "FERRARA",
+            "Rimini": "RIMINI",
+            "Forlì": "FORLI'",
+            "Cesena": "CESENA",
+            
+            # Veneto
+            "Vicenza": "VICENZA",
+            "Treviso": "TREVISO CENTRALE",
+            "Belluno": "BELLUNO",
+            "Rovigo": "ROVIGO",
+            
+            # Piemonte
+            "Alessandria": "ALESSANDRIA",
+            "Asti": "ASTI",
+            "Cuneo": "CUNEO",
+            "Novara": "NOVARA",
+            "Vercelli": "VERCELLI",
+            "Biella": "BIELLA SAN PAOLO",
+            
+            # Lombardia
+            "Bergamo": "BERGAMO",
+            "Como": "COMO SAN GIOVANNI",
+            "Cremona": "CREMONA",
+            "Mantova": "MANTOVA",
+            "Pavia": "PAVIA",
+            "Sondrio": "SONDRIO",
+            "Varese": "VARESE",
+            "Lecco": "LECCO",
+            "Lodi": "LODI",
+            "Monza": "MONZA",
+            
+            # Lazio
+            "Latina": "LATINA",
+            "Frosinone": "FROSINONE",
+            "Rieti": "RIETI",
+            "Viterbo": "VITERBO PORTA ROMANA",
+            
+            # Campania
+            "Caserta": "CASERTA",
+            "Avellino": "AVELLINO",
+            "Benevento": "BENEVENTO",
+            
+            # Puglia
+            "Taranto": "TARANTO",
+            "Foggia": "FOGGIA",
+            "Brindisi": "BRINDISI",
+            
+            # Calabria  
+            "Reggio Calabria": "REGGIO DI CALABRIA CENTRALE",
+            "Catanzaro": "CATANZARO",
+            "Cosenza": "COSENZA",
+            "Crotone": "CROTONE",
+            "Vibo Valentia": "VIBO VALENTIA PIZZO",
+            
+            # Sicilia
+            "Messina": "MESSINA CENTRALE",
+            "Trapani": "TRAPANI",
+            "Agrigento": "AGRIGENTO CENTRALE",
+            "Ragusa": "RAGUSA",
+            "Caltanissetta": "CALTANISSETTA CENTRALE",
+            "Enna": "ENNA",
+            
+            # Sardegna
+            "Cagliari": "CAGLIARI",
+            "Sassari": "SASSARI",
+            "Olbia": "OLBIA",
+            "Nuoro": "NUORO",
+            "Oristano": "ORISTANO",
+            
+            # Marche
+            "Pesaro": "PESARO",
+            "Macerata": "MACERATA",
+            "Ascoli Piceno": "ASCOLI PICENO",
+            "Fermo": "FERMO",
+            
+            # Umbria
+            "Terni": "TERNI",
+            "Spoleto": "SPOLETO",
+            
+            # Abruzzo
+            "L'Aquila": "L'AQUILA",
+            "Teramo": "TERAMO",
+            "Pescara": "PESCARA CENTRALE",
+            "Chieti": "CHIETI",
+            
+            # Molise
+            "Campobasso": "CAMPOBASSO",
+            "Isernia": "ISERNIA",
+            
+            # Friuli
+            "Udine": "UDINE",
+            "Pordenone": "PORDENONE",
+            "Gorizia": "GORIZIA CENTRALE",
+            
+            # Liguria
+            "La Spezia": "LA SPEZIA CENTRALE",
+            "Imperia": "IMPERIA",
+            "Savona": "SAVONA",
+            
+            # Trentino Alto Adige
+            "Trento": "TRENTO",
+            "Bolzano": "BOLZANO BOZEN",
+            "Rovereto": "ROVERETO",
+            
+            # Valle d'Aosta
+            "Aosta": "AOSTA",
+            
+            # Basilicata
+            "Potenza": "POTENZA CENTRALE",
+            "Matera": "MATERA CENTRALE"
         }
         
         # Usa nome dalla mappa se disponibile
         search_name = station_names.get(city_name, city_name.upper())
         
         try:
+            # Prova prima getCodStazione (più veloce)
             code = self.api.getCodStazione(search_name)
             if code:
                 self.station_cache[city_name] = code
                 print(f"    📍 {city_name} -> {search_name} ({code})")
                 return code
+            
+            # Fallback: usa searchStazione e prendi prima stazione principale
+            results = self.api.searchStazione(city_name.upper())
+            if results and len(results) > 0:
+                # Prendi prima stazione (di solito è quella principale)
+                first_station = results[0]
+                code = first_station.get('id')
+                name = first_station.get('nomeLungo', city_name)
+                if code:
+                    self.station_cache[city_name] = code
+                    print(f"    📍 {city_name} -> {name} ({code})")
+                    return code
         except Exception as e:
             print(f"    ⚠️ Errore ricerca stazione {city_name}: {e}")
         

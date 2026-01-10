@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Tuple
 import sys
+import random
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -688,11 +689,24 @@ class DPItineraryPlanner:
             avg_speed = 85  # Much slower for very long routes
             estimated_hours = (distance_km / avg_speed) + 1.5
         
+        # Randomizza orario partenza tra 09:00 e 12:00 per variare i risultati
+        departure_hour = random.randint(9, 12)
+        departure_minute = random.randint(0, 59)
+        departure_time = f"{departure_hour:02d}:{departure_minute:02d}"
+        
+        # Calcola arrivo
+        arrival_hour = departure_hour + int(estimated_hours)
+        arrival_minute = departure_minute + int((estimated_hours % 1) * 60)
+        if arrival_minute >= 60:
+            arrival_hour += 1
+            arrival_minute -= 60
+        arrival_time = f"{arrival_hour:02d}:{arrival_minute:02d}"
+        
         return {
             'train': None,
             'travel_time': round(estimated_hours, 2),
-            'departure': '09:00',
-            'arrival': f"{9 + int(estimated_hours):02d}:{int((estimated_hours % 1) * 60):02d}",
+            'departure': departure_time,
+            'arrival': arrival_time,
             'price': max(10.0, distance_km * 0.12),  # ~0.12€/km
             'changes': 0,
             'numero_treno': 'STIMATO',
