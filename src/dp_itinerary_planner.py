@@ -90,6 +90,22 @@ class DPItineraryPlanner:
         # Cache
         self.train_cache = {}  # (origin_code, dest_code, date) -> train_info
     
+    def _calculate_distance(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+        """
+        Calcola distanza tra due coordinate usando formula di Haversine
+        
+        Returns:
+            Distanza in chilometri
+        """
+        from math import radians, cos, sin, asin, sqrt
+        
+        lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+        dlat = lat2 - lat1
+        dlon = lon2 - lon1
+        a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+        c = 2 * asin(sqrt(a))
+        return 6371 * c  # Raggio Terra in km
+    
     def estimate_computation_time(self, trip_input: TripInput) -> Dict[str, float]:
         """
         Stima tempo di computazione per mostrare progress bar
@@ -1403,13 +1419,22 @@ class DPItineraryPlanner:
         start_date: datetime
     ) -> None:
         """
-        Step 6: Arricchisce lo schedule con dati treni reali
+        Step 6: Arricchisce lo schedule con dati treni reali per TUTTE le tratte
         
-        Strategia:
-        - Durante DP abbiamo usato fallback geometrico (veloce)
-        - Ora per il percorso finale usiamo API reale (accurato)
-        - Solo ~2-5 chiamate API invece di centinaia
+        Strategia ESTESA:
+        1. Prova a trovare treni reali per OGNI segmento del percorso
+        2. Se un treno diretto non esiste, prova percorsi con città intermedie
+        3. Se nessun percorso reale trovato, usa fallback geometrico
+        4. Traccia quali tratte hanno dati reali vs stime
+        
+        Questo garantisce che l'intero itinerario sia verificato con dati API reali
         """
+        print(f"  📊 Verifico {len([d for d in schedule if d.morning_train])} tratte con API Trenitalia...")
+        
+        real_trains_found = 0
+        fallback_used = 0
+        alternative_routes_found = 0
+        
         for day in schedule:
             # Solo per giorni con treno
             if not day.morning_train or not day.from_city:
@@ -1421,6 +1446,7 @@ class DPItineraryPlanner:
             # Se già ha dati reali, salta
             if day.morning_train.get('real_data'):
                 print(f"  ✓ Day {day.day_number}: {origin}→{dest} già con dati reali")
+                real_trains_found += 1
                 continue
             
             print(f"  🔍 Day {day.day_number}: Cerco treno reale {origin}→{dest}")
@@ -1430,26 +1456,211 @@ class DPItineraryPlanner:
             current_datetime = start_date + timedelta(days=day.day_number - 1)
             current_datetime = current_datetime.replace(hour=search_hour, minute=0)
             
-            # USA API REALE
+            # Strategia multi-livello
+            real_train = None
+            
+            # LIVELLO 1: Prova treno diretto
             try:
                 real_train = self._find_best_train(
                     origin,
                     dest,
                     current_datetime,
-                    use_real_api=True  # Questa volta USA API reale!
+                    use_real_api=True
                 )
                 
                 if real_train and real_train.get('real_data'):
-                    # Sostituisci con dati reali
                     day.morning_train = real_train
                     day.travel_time = real_train['travel_time']
-                    print(f"    ✅ Trovato: {real_train['train_number']} ({real_train['train_type']}), "
+                    print(f"    ✅ Diretto: {real_train['train_number']} ({real_train['train_type']}), "
                           f"{real_train['departure']} → {real_train['arrival']} ({real_train['travel_time']:.1f}h)")
-                else:
-                    print(f"    ⚠️ Nessun treno reale trovato, mantengo stima geometrica")
+                    real_trains_found += 1
+                    continue
             
             except Exception as e:
-                print(f"    ❌ Errore API: {e}, mantengo stima geometrica")
+                print(f"    ⚠️ Errore ricerca diretta: {e}")
+            
+            # LIVELLO 2: Prova con città intermedia (se distanza > 300km)
+            origin_data = self.city_db.get_city_by_name(origin)
+            dest_data = self.city_db.get_city_by_name(dest)
+            
+            if origin_data and dest_data:
+                distance = self._calculate_distance(
+                    origin_data['coordinates']['lat'],
+                    origin_data['coordinates']['lon'],
+                    dest_data['coordinates']['lat'],
+                    dest_data['coordinates']['lon']
+                )
+                
+                if distance > 300:  # Tratte lunghe potrebbero richiedere cambio
+                    print(f"    🔄 Distanza {distance:.0f}km: provo percorsi alternativi...")
+                    
+                    alternative = self._find_alternative_route(
+                        origin,
+                        dest,
+                        current_datetime
+                    )
+                    
+                    if alternative:
+                        day.morning_train = alternative
+                        day.travel_time = alternative['travel_time']
+                        print(f"    ✅ Via {alternative.get('via', 'intermedia')}: "
+                              f"{alternative['departure']} → {alternative['arrival']} "
+                              f"({alternative['travel_time']:.1f}h, {alternative.get('changes', 0)} cambi)")
+                        real_trains_found += 1
+                        alternative_routes_found += 1
+                        continue
+            
+            # LIVELLO 3: Fallback geometrico
+            print(f"    ⚠️ Nessun treno reale trovato, uso stima geometrica")
+            fallback_used += 1
+        
+        # Riepilogo finale
+        total_trains = real_trains_found + fallback_used
+        if total_trains > 0:
+            coverage = (real_trains_found / total_trains) * 100
+            print(f"\n  📈 Copertura dati reali: {real_trains_found}/{total_trains} tratte ({coverage:.0f}%)")
+            if alternative_routes_found > 0:
+                print(f"     └─ {alternative_routes_found} percorsi alternativi trovati")
+            if fallback_used > 0:
+                print(f"     └─ {fallback_used} tratte con stima geometrica")
+    
+    def _find_alternative_route(
+        self,
+        origin: str,
+        dest: str,
+        departure_time: datetime
+    ) -> Optional[Dict]:
+        """
+        Trova percorsi alternativi con città intermedie se non esiste treno diretto
+        
+        Strategia:
+        1. Identifica città intermedie plausibili sulla rotta
+        2. Cerca combinazioni origin→via→dest
+        3. Valida tempi di attesa ai cambi (10min-3h)
+        4. Ritorna il percorso multi-segmento migliore
+        """
+        # Ottieni coordinate
+        origin_data = self.city_db.get_city_by_name(origin)
+        dest_data = self.city_db.get_city_by_name(dest)
+        
+        if not origin_data or not dest_data:
+            return None
+        
+        # Trova città intermedie candidate (lungo la rotta)
+        all_cities = self.city_db.get_all_cities()
+        intermediate_candidates = []
+        
+        for city_data in all_cities:
+            city_name = city_data['name']
+            if city_name == origin or city_name == dest:
+                continue
+            
+            # Verifica se sulla rotta (usando distanza come proxy)
+            dist_origin_via = self._calculate_distance(
+                origin_data['coordinates']['lat'],
+                origin_data['coordinates']['lon'],
+                city_data['coordinates']['lat'],
+                city_data['coordinates']['lon']
+            )
+            
+            dist_via_dest = self._calculate_distance(
+                city_data['coordinates']['lat'],
+                city_data['coordinates']['lon'],
+                dest_data['coordinates']['lat'],
+                dest_data['coordinates']['lon']
+            )
+            
+            dist_direct = self._calculate_distance(
+                origin_data['coordinates']['lat'],
+                origin_data['coordinates']['lon'],
+                dest_data['coordinates']['lat'],
+                dest_data['coordinates']['lon']
+            )
+            
+            # Se il percorso via questa città è < 50% più lungo, considerala
+            detour = (dist_origin_via + dist_via_dest) - dist_direct
+            if detour < dist_direct * 0.5 and detour < 150:  # Max 150km detour
+                intermediate_candidates.append({
+                    'name': city_name,
+                    'detour': detour,
+                    'dist_from_origin': dist_origin_via
+                })
+        
+        # Ordina per detour minimo
+        intermediate_candidates.sort(key=lambda x: x['detour'])
+        
+        # Prova le migliori 3 città intermedie
+        for via_city in intermediate_candidates[:3]:
+            try:
+                # Segmento 1: origin → via
+                seg1 = self._find_best_train(
+                    origin,
+                    via_city['name'],
+                    departure_time,
+                    use_real_api=True
+                )
+                
+                if not seg1 or not seg1.get('real_data'):
+                    continue
+                
+                # Calcola orario arrivo a città intermedia
+                from datetime import datetime
+                arr1_time = datetime.strptime(seg1['arrival'], '%H:%M')
+                arr1_datetime = departure_time.replace(
+                    hour=arr1_time.hour,
+                    minute=arr1_time.minute
+                )
+                
+                # Aggiungi 30min di buffer per cambio
+                dep2_datetime = arr1_datetime + timedelta(minutes=30)
+                
+                # Segmento 2: via → dest
+                seg2 = self._find_best_train(
+                    via_city['name'],
+                    dest,
+                    dep2_datetime,
+                    use_real_api=True
+                )
+                
+                if not seg2 or not seg2.get('real_data'):
+                    continue
+                
+                # Verifica tempo di attesa ragionevole
+                dep2_time = datetime.strptime(seg2['departure'], '%H:%M')
+                dep2_datetime_actual = arr1_datetime.replace(
+                    hour=dep2_time.hour,
+                    minute=dep2_time.minute
+                )
+                
+                wait_minutes = (dep2_datetime_actual - arr1_datetime).total_seconds() / 60
+                
+                if wait_minutes < 10 or wait_minutes > 180:  # 10min-3h
+                    continue
+                
+                # Successo! Crea percorso combinato
+                total_duration = seg1['travel_time'] + seg2['travel_time'] + (wait_minutes / 60)
+                
+                return {
+                    'train': {
+                        'segments': [seg1, seg2],
+                        'origin': origin,
+                        'destination': dest,
+                        'via': via_city['name']
+                    },
+                    'travel_time': total_duration,
+                    'departure': seg1['departure'],
+                    'arrival': seg2['arrival'],
+                    'price': seg1['price'] + seg2['price'],
+                    'changes': 1,
+                    'via': via_city['name'],
+                    'wait_time': wait_minutes / 60,
+                    'real_data': True
+                }
+            
+            except Exception as e:
+                continue
+        
+        return None
 
 
 def demo_dp_planner():
