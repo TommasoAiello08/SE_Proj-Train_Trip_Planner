@@ -702,12 +702,16 @@ class DPItineraryPlanner:
             arrival_minute -= 60
         arrival_time = f"{arrival_hour:02d}:{arrival_minute:02d}"
         
+        # Randomizza prezzo tra 0.10€/km e 0.15€/km per variare i risultati
+        price_per_km = random.uniform(0.10, 0.15)
+        estimated_price = max(10.0, distance_km * price_per_km)
+        
         return {
             'train': None,
             'travel_time': round(estimated_hours, 2),
             'departure': departure_time,
             'arrival': arrival_time,
-            'price': max(10.0, distance_km * 0.12),  # ~0.12€/km
+            'price': round(estimated_price, 2),
             'changes': 0,
             'numero_treno': 'STIMATO',
             'estimated': True
