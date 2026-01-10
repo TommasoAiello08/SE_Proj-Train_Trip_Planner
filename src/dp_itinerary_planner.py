@@ -87,6 +87,10 @@ class DPItineraryPlanner:
         
         # Cache
         self.train_cache = {}  # (origin_code, dest_code, date) -> train_info
+
+        # ViaggiaTreno caches to reduce request volume (avoids throttling during matrix build)
+        self._vt_station_cache: Dict[str, Optional[Dict]] = {}
+        self._vt_departures_cache: Dict[Tuple[str, str], Optional[List[Dict]]] = {}
     
     def estimate_computation_time(self, trip_input: TripInput) -> Dict[str, float]:
         """
@@ -510,6 +514,12 @@ class DPItineraryPlanner:
             current_date = start_date + timedelta(days=day - 1)
             current_datetime = current_date.replace(hour=search_hour, minute=0, second=0)
             print(f"  📅 Giorno {day} ({current_datetime.strftime('%Y-%m-%d %H:%M')})")
+
+            # IMPORTANT: ViaggiaTreno station endpoints (partenze/andamento) are live and generally
+            # work reliably only for the current day. For multi-day itineraries, using the actual
+            # future date would often return empty results and force STIMATO fallback.
+            # We therefore query schedules using *today's* date, keeping the intended time-of-day.
+            schedule_datetime = datetime.now().replace(hour=search_hour, minute=0, second=0, microsecond=0)
             
             # Per ogni città di origine
             for origin in candidates:
@@ -533,7 +543,7 @@ class DPItineraryPlanner:
                     train_info = self._find_best_train(
                         origin,
                         dest,
-                        current_datetime
+                        schedule_datetime
                     )
                     
                     if train_info:
@@ -556,8 +566,8 @@ class DPItineraryPlanner:
         3. Seleziona treno con min durata (o min cambi)
         4. Fallback: stima geometrica
         """
-        # Controlla cache
-        cache_key = (origin_city, dest_city, date.strftime('%Y-%m-%d'))
+        # Controlla cache (include time-of-day to avoid reusing a morning train for afternoon searches)
+        cache_key = (origin_city, dest_city, date.strftime('%Y-%m-%d %H:%M'))
         if cache_key in self.train_cache:
             return self.train_cache[cache_key]
         
@@ -568,44 +578,182 @@ class DPItineraryPlanner:
         if not origin_data or not dest_data:
             return None
         
-        origin_station_code = origin_data.get('station_code')
-        dest_station_code = dest_data.get('station_code')
-        
-        if not origin_station_code or not dest_station_code:
-            # Fallback: stima geometrica
-            return self._estimate_train_connection(origin_data, dest_data)
-        
         try:
-            # Chiamata API reale
-            soluzioni = self.api_treni.getIndicazioniViaggio(
-                origin_station_code,
-                dest_station_code,
-                date
-            )
-            
-            if soluzioni and len(soluzioni) > 0:
-                # Prendi soluzione migliore (min durata)
-                best = min(soluzioni, key=lambda s: self._parse_duration(s.get('durata', '99:99')))
-                
-                train_info = {
-                    'train': best,
-                    'travel_time': self._parse_duration(best.get('durata', '3:00')),
-                    'departure': best.get('orarioPartenza', '09:00'),
-                    'arrival': best.get('orarioArrivo', '12:00'),
-                    'price': best.get('prezzo_stimato', {}).get('seconda_classe', 30.0),
-                    'changes': best.get('cambi', 0),
-                    'numero_treno': best.get('soluzione', [{}])[0].get('numeroTreno', 'N/A') if best.get('soluzione') else 'N/A'
-                }
-                
-                # Cache
+            # NOTE: ViaggiaTreno "soluzioniViaggioNew" is frequently unavailable (404).
+            # Use working endpoints: station departures + train status.
+            train_info = self._find_best_train_from_departures(origin_city, dest_city, date)
+            if train_info:
                 self.train_cache[cache_key] = train_info
                 return train_info
-        
         except Exception as e:
             print(f"    ⚠️  API error {origin_city}->{dest_city}: {e}")
-        
-        # Fallback
+
+        # Fallback: stima geometrica
         return self._estimate_train_connection(origin_data, dest_data)
+
+    def _find_best_train_from_departures(self, origin_city: str, dest_city: str, date: datetime) -> Optional[Dict]:
+        """Find a plausible direct train using ViaggiaTreno `partenze` + `andamentoTreno`.
+
+        Constraints:
+        - departure time must be >= 08:00
+        - ViaggiaTreno does not provide ticket prices; price is estimated
+        """
+        origin_station = self._pick_viaggiatreno_station(origin_city)
+        dest_station = self._pick_viaggiatreno_station(dest_city)
+        if not origin_station or not dest_station:
+            return None
+
+        # Enforce departure after 08:00
+        search_dt = date
+        if search_dt.hour < 8:
+            search_dt = search_dt.replace(hour=8, minute=0, second=0, microsecond=0)
+
+        dep_cache_key = (str(origin_station['id']), search_dt.strftime('%Y-%m-%d %H:%M'))
+        if dep_cache_key in self._vt_departures_cache:
+            departures = self._vt_departures_cache[dep_cache_key]
+        else:
+            raw_departures = self.api_treni.getPartenze(origin_station['id'], search_dt)
+            departures = raw_departures if isinstance(raw_departures, list) else None
+            # Cache even None to avoid hammering when the endpoint is temporarily failing
+            self._vt_departures_cache[dep_cache_key] = departures
+        if not departures or not isinstance(departures, list):
+            return None
+
+        dest_upper = str(dest_station.get('nomeLungo') or dest_station.get('nomeBreve') or '').strip().upper()
+        if not dest_upper:
+            return None
+
+        # Collect direct candidates to the requested destination
+        candidates = []
+        for item in departures:
+            if not isinstance(item, dict):
+                continue
+            if str(item.get('destinazione', '')).strip().upper() != dest_upper:
+                continue
+            numero_treno = item.get('numeroTreno')
+            dep_hhmm = item.get('orarioPartenza')
+            if not numero_treno or not dep_hhmm:
+                continue
+            candidates.append((str(numero_treno).strip(), str(dep_hhmm).strip(), item))
+
+        if not candidates:
+            return None
+
+        # Limit remote calls
+        candidates = candidates[:6]
+
+        best_info = None
+        best_duration = None
+
+        for numero_treno, dep_hhmm, raw in candidates:
+            dep_dt = self._combine_date_hhmm(search_dt, dep_hhmm)
+            andamento = self.api_treni.getAndamento(origin_station['id'], numero_treno, dep_dt)
+            if not andamento or not isinstance(andamento, dict):
+                continue
+
+            durata = andamento.get('compDurata')
+            if not durata:
+                continue
+            duration_h = self._parse_duration(str(durata))
+            if duration_h <= 0:
+                continue
+
+            categoria = raw.get('categoriaDescrizione') or raw.get('categoria') or raw.get('tipoTreno')
+            train_label = f"{categoria} {numero_treno}".strip() if categoria else f"{numero_treno}"
+
+            price_est = self._estimate_price_for_train(origin_city, dest_city, categoria)
+
+            info = {
+                'train': train_label,
+                'travel_time': round(duration_h, 2),
+                'departure': andamento.get('compOrarioPartenza') or dep_hhmm,
+                'arrival': andamento.get('compOrarioArrivo'),
+                'price': price_est,
+                'price_estimated': True,
+                'changes': 0,
+                'numero_treno': numero_treno,
+                'estimated': False
+            }
+
+            if best_info is None or best_duration is None or duration_h < best_duration:
+                best_info = info
+                best_duration = duration_h
+
+        return best_info
+
+    def _estimate_price_for_train(self, origin_city: str, dest_city: str, categoria: Optional[str]) -> float:
+        """Category-aware price estimate (1 adult) when real pricing isn't available."""
+        try:
+            origin_data = self.city_db.get_city_by_name(origin_city)
+            dest_data = self.city_db.get_city_by_name(dest_city)
+            if not origin_data or not dest_data:
+                return 30.0
+
+            distance_km = self.city_db.calculate_distance(origin_data, dest_data)
+            if not distance_km or distance_km <= 0:
+                return 30.0
+
+            cat = (categoria or '').upper()
+            # Rough €/km bands by service type
+            if 'FR' in cat or 'FRECCIAROSSA' in cat or 'FRECCIARGENTO' in cat or 'FRECCIABIANCA' in cat:
+                rate = 0.22
+                base = 12.0
+            elif 'IC' in cat or 'INTERCITY' in cat:
+                rate = 0.15
+                base = 10.0
+            else:
+                # Regionale / unknown
+                rate = 0.10
+                base = 8.0
+
+            return round(max(base, distance_km * rate), 2)
+        except Exception:
+            return 30.0
+
+    def _combine_date_hhmm(self, base_dt: datetime, hhmm: str) -> datetime:
+        try:
+            parts = str(hhmm).split(':')
+            hh = int(parts[0])
+            mm = int(parts[1])
+            return base_dt.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        except Exception:
+            return base_dt
+
+    def _pick_viaggiatreno_station(self, query: str) -> Optional[Dict]:
+        """Pick a likely main station for a city name using ViaggiaTreno station search."""
+        q_norm = (query or '').strip().lower()
+        if q_norm in self._vt_station_cache:
+            return self._vt_station_cache[q_norm]
+
+        results = self.api_treni.searchStazione(query)
+        if not results:
+            self._vt_station_cache[q_norm] = None
+            return None
+        if isinstance(results, dict):
+            self._vt_station_cache[q_norm] = results
+            return results
+        if not isinstance(results, list):
+            self._vt_station_cache[q_norm] = None
+            return None
+
+        q = q_norm
+
+        # Prefer a "Centrale" station when available
+        for st in results:
+            name = str(st.get('nomeLungo', '')).lower()
+            if 'centrale' in name and (q in name or q == ''):
+                self._vt_station_cache[q_norm] = st
+                return st
+
+        # Otherwise prefer an exact nomeLungo match
+        for st in results:
+            if str(st.get('nomeLungo', '')).strip().lower() == q:
+                self._vt_station_cache[q_norm] = st
+                return st
+
+        picked = results[0] if results else None
+        self._vt_station_cache[q_norm] = picked
+        return picked
     
     def _estimate_train_connection(
         self,

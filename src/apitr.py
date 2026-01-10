@@ -1,5 +1,7 @@
 from datetime import datetime
 import requests
+from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 '''
 	API Trenitalia
@@ -24,11 +26,42 @@ class apitr:
 	}
 
 	__datetimeFormat = {
-		'partenze':'%a %b %d %Y %H:%M:%S GMT+0200 (Ora legale dell’Europa centrale)',
-		'arrivi':'%a %b %d %Y %H:%M:%S GMT+0200 (Ora legale dell’Europa centrale)',
 		'andamento':'timestamp',
-		'indicazioniViaggio':'%Y-%m-%dT%H:%M:%S'	#YYYY-MM-DDTHH:MM:SS
+		'indicazioniViaggio':'%Y-%m-%dT%H:%M:%S' 	#YYYY-MM-DDTHH:MM:SS (endpoint may not be available)
 	}
+
+	def __format_viaggiatreno_station_datetime(self, date: datetime) -> str:
+		"""Format datetime for ViaggiaTreno station endpoints (partenze/arrivi).
+
+		These endpoints expect a *URL-encoded* string like:
+		"Sat Jan 10 2026 09:00:00 GMT+0100 (Ora standard dell’Europa centrale)"
+		or (summer time):
+		"... GMT+0200 (Ora legale dell’Europa centrale)"
+		"""
+		rome = ZoneInfo('Europe/Rome')
+		local_dt = date
+		try:
+			# If naive, assume Europe/Rome
+			if local_dt.tzinfo is None:
+				local_dt = local_dt.replace(tzinfo=rome)
+			else:
+				local_dt = local_dt.astimezone(rome)
+		except Exception:
+			# Fallback: treat as naive
+			pass
+
+		# Determine CET/CEST offset and Italian label
+		offset = local_dt.utcoffset() or None
+		# Default CET
+		gmt = 'GMT+0100'
+		label = 'Ora standard dell’Europa centrale'
+		if offset is not None and int(offset.total_seconds()) == 7200:
+			gmt = 'GMT+0200'
+			label = 'Ora legale dell’Europa centrale'
+
+		raw = local_dt.strftime('%a %b %d %Y %H:%M:%S') + f' {gmt} ({label})'
+		# Critical: the string must be URL-encoded because it contains spaces and unicode apostrophe
+		return quote(raw)
 
 	def __dateTime2Str(self,date: datetime, format:str):
 		if (format == 'timestamp'):
@@ -37,7 +70,15 @@ class apitr:
 			return date.strftime(format)
 	
 	def __request(self, uri):
-		x = requests.get(uri, headers={'Accept-Charset': 'utf-8'})
+		x = requests.get(
+			uri,
+			headers={
+				'Accept': 'application/json, text/plain, */*',
+				'Accept-Charset': 'utf-8',
+				'User-Agent': 'se-proj-train-trip-planner/1.0 (+https://localhost)'
+			},
+			timeout=12,
+		)
 		#set to use utf-8
 		if (x.status_code == 200):
 			try:
@@ -63,12 +104,12 @@ class apitr:
 	def getPartenze(self, idStazione:str, dataora: datetime):
 		# GET /resteasy/viaggiatreno/partenze/{codiceStazione}/{orario}
 		return self.__request(self.__uris['partenze'] + idStazione 
-								+ '/' + self.__dateTime2Str(dataora, self.__datetimeFormat['partenze']))
+							+ '/' + self.__format_viaggiatreno_station_datetime(dataora))
 
 	def getArrivi(self, idStazione:str, dataora: datetime):
 		# GET /resteasy/viaggiatreno/arrivi/{codiceStazione}/{orario}
 		return self.__request(self.__uris['arrivi'] + idStazione 
-								+ '/' + self.__dateTime2Str(dataora, self.__datetimeFormat['arrivi']))
+							+ '/' + self.__format_viaggiatreno_station_datetime(dataora))
 
 	def getAndamento(self, idStazioneOrigine:str, idTreno:str, dataoraPartenza: datetime):
 		# GET /resteasy/viaggiatreno/andamentoTreno/{codOrigine}/{numeroTreno}/{dataPartenza}
