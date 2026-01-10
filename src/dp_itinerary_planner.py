@@ -1,25 +1,22 @@
-"""
-Dynamic Programming Itinerary Planner con API Trenitalia
-=========================================================
+"""Dynamic Programming Itinerary Planner using Trenitalia APIs.
 
-Basato sul report: algoritmo DP per macro-itinerario + Knapsack per attrazioni
+Based on the project report: DP for the macro route and a knapsack style selection for attractions.
 
-Input:
-- start_province, end_province
-- travel_days (N)
-- preferences (categorie + pesi)
-- start_date
+Inputs
+1) start province and end province
+2) travel days N
+3) preferences as categories and weights
+4) start date
 
-Output:
-- Itinerario ottimale giorno per giorno con treni reali
+Output
+An optimal day by day itinerary that uses real train data when available.
 
-Algoritmo:
-1. **Candidate selection**: top-N province per score
-2. **Train matrix**: chiamate API reali per ogni coppia (A,B) per giorno
-3. **DP macro**: dp[d][B] = max score raggiungendo B al giorno d
-4. **Knapsack micro**: per ogni provincia, seleziona attrazioni ottimali
-5. **Vincolo**: minimo 1 giorno per provincia
-
+Algorithm
+1) Candidate selection: choose the top N provinces by score
+2) Train matrix: real API lookups for each pair A, B and each day
+3) DP macro: dp[d][B] is the best score when reaching B on day d
+4) Knapsack micro: per province, pick the best attractions
+5) Constraint: at least one day per province
 """
 
 from dataclasses import dataclass
@@ -36,7 +33,7 @@ from apitr import apitr
 
 @dataclass
 class TripInput:
-    """Input richiesta viaggio"""
+    """Trip request input."""
     days: int
     start_city: str
     end_city: str
@@ -47,45 +44,45 @@ class TripInput:
 
 @dataclass
 class DaySchedule:
-    """Schedule di un singolo giorno"""
+    """Schedule for a single day."""
     day_number: int
     date: datetime
     city: str
     
-    # Viaggio
+    # Travel
     morning_train: Optional[Dict] = None
     travel_time: float = 0.0
     from_city: Optional[str] = None
     
-    # Attività
+    # Activities
     pois: List[Dict] = None
     available_hours: float = 0.0
     
-    # Costi
+    # Costs
     estimated_cost: float = 0.0
     daily_cost: float = 0.0
 
 
 class DPItineraryPlanner:
     """
-    Planner con Dynamic Programming per ottimizzazione globale
+    Planner that uses Dynamic Programming for global optimization.
     """
     
     def __init__(self):
         self.city_db = CityDatabase(use_osm=True)
         self.api_treni = apitr(decodeJson=True)
         
-        # Parametri configurabili  
-        self.HOURS_PER_DAY = 13  # Ore disponibili per giorno (8:00-21:00)
-        self.MIN_STAY_HOURS = 2  # Reduced from 3 - più flessibilità per viaggi lunghi
-        self.MAX_TRAIN_HOURS_PER_DAY = 12  # Increased from 10 - permette tratte più lunghe
-        self.MAX_DAYS_PER_CITY = 2  # Max giorni consecutivi per città
-        self.MAX_CANDIDATES = 35  # Increased from 30 - more cities for long routes
-        self.MAX_CONNECTIONS_PER_CITY = 12  # Increased from 8 - explore more routes to reach distant cities
-        self.TRAIN_BUFFER_HOURS = 1.0  # Buffer per accesso stazione
+        # Configurable parameters
+        self.HOURS_PER_DAY = 13  # Hours available per day, 08:00 to 21:00
+        self.MIN_STAY_HOURS = 2  # Reduced from 3, more flexibility for long trips
+        self.MAX_TRAIN_HOURS_PER_DAY = 12  # Increased from 10, allows longer legs
+        self.MAX_DAYS_PER_CITY = 2  # Max consecutive days per city
+        self.MAX_CANDIDATES = 35  # Increased from 30, more cities for long routes
+        self.MAX_CONNECTIONS_PER_CITY = 12  # Increased from 8, explore more routes
+        self.TRAIN_BUFFER_HOURS = 1.0  # Buffer time to reach the station
         
         # Cache
-        self.train_cache = {}  # (origin_city, dest_city, yyyy-mm-dd hh:mm) -> train_info
+        self.train_cache = {}  # (origin city, dest city, YYYY MM DD HH:MM) to train info
 
         # ViaggiaTreno caches to reduce request volume (avoids throttling during matrix build)
         self._vt_station_cache: Dict[str, Optional[Dict]] = {}
@@ -93,10 +90,10 @@ class DPItineraryPlanner:
     
     def _calculate_distance(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
         """
-        Calcola distanza tra due coordinate usando formula di Haversine
+        Compute distance between two coordinates using the Haversine formula.
         
         Returns:
-            Distanza in chilometri
+            Distance in kilometers
         """
         from math import radians, cos, sin, asin, sqrt
         
@@ -105,11 +102,11 @@ class DPItineraryPlanner:
         dlon = lon2 - lon1
         a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
         c = 2 * asin(sqrt(a))
-        return 6371 * c  # Raggio Terra in km
+        return 6371 * c  # Earth radius in km
     
     def estimate_computation_time(self, trip_input: TripInput) -> Dict[str, float]:
         """
-        Stima tempo di computazione per mostrare progress bar
+        Estimate computation time for a progress bar.
         
         Returns:
             {
@@ -125,10 +122,10 @@ class DPItineraryPlanner:
         # Candidate selection: small and fairly stable.
         t_candidates = 0.5
 
-        # Train matrix dominates wall-clock time.
+        # Train matrix dominates wall clock time.
         # ViaggiaTreno strategy:
-        # - ~1 `partenze` call per origin/day
-        # - some `andamentoTreno` calls for promising departures
+        # About one `partenze` call per origin per day
+        # Plus some `andamentoTreno` calls for promising departures
         departure_calls = min(self.MAX_CANDIDATES * num_days, 80)
         total_pairs = self.MAX_CANDIDATES * self.MAX_CONNECTIONS_PER_CITY * num_days
         andamento_calls = min(int(total_pairs * 0.25), 180)
@@ -136,7 +133,7 @@ class DPItineraryPlanner:
 
         t_train_matrix = (departure_calls * 0.35) + (andamento_calls * 0.35) + 8.0
 
-        # DP + schedule generation
+        # DP plus schedule generation
         t_dp = max(0.7, num_days * 0.25)
         t_details = num_days * 0.2
 
@@ -153,23 +150,23 @@ class DPItineraryPlanner:
     
     def plan_trip(self, trip_input: TripInput) -> List[DaySchedule]:
         """
-        Metodo principale: pianifica itinerario con DP
-        
-        Steps:
-        1. Score e selezione province candidate
-        2. Costruzione matrice treni (API reali)
-        3. DP per sequenza province ottimale
-        4. Knapsack per attrazioni in ogni tappa
-        5. Genera schedule dettagliato
+        Main entry point: plan an itinerary with DP.
+
+        Steps
+        1) Score and select candidate cities
+        2) Build the train matrix using live API calls
+        3) Run DP to find the best city sequence
+        4) Select attractions for each stop with a knapsack style approach
+        5) Generate a detailed day by day schedule
         """
         print(f"\n🚀 DP ITINERARY PLANNER")
         print(f"📍 {trip_input.start_city} → {trip_input.end_city}")
         print(f"📅 {trip_input.days} giorni")
         print(f"🎯 Interessi: {', '.join(trip_input.interests)}")
         
-        # Stima tempo
+        # Time estimate
         time_estimate = self.estimate_computation_time(trip_input)
-        print(f"⏱️  Tempo stimato: {time_estimate['total_estimated']:.1f}s")
+        print(f"⏱️ Estimated time: {time_estimate['total_estimated']:.1f}s")
         print("="*70)
         
         start_date = trip_input.start_date or datetime.now()
@@ -189,7 +186,7 @@ class DPItineraryPlanner:
             trip_input.end_city  # Pass end city to ensure it's always reachable
         )
         
-        # Step 3: DP per sequenza ottimale
+        # Step 3: DP optimization for the best sequence
         route, dp_scores = self._dp_route_optimization(
             trip_input.start_city,
             trip_input.end_city,
@@ -199,14 +196,14 @@ class DPItineraryPlanner:
             trip_input.interests
         )
         
-        # Step 4: Alloca giorni a province (minimo 1)
+        # Step 4: Allocate days to cities (at least one per city)
         day_allocation = self._allocate_days_to_route(
             route,
             trip_input.days,
             train_matrix
         )
         
-        # Step 5: Genera schedule dettagliato con Knapsack
+        # Step 5: Generate a detailed schedule with attraction selection
         schedule = self._generate_detailed_schedule(
             route,
             day_allocation,
@@ -225,25 +222,22 @@ class DPItineraryPlanner:
         interests: List[str]
     ) -> List[str]:
         """
-        Step 1: Seleziona top-N province per score
-        
-        Score basato su:
-        - Numero attrazioni per categorie preferite
-        - Rating medio
-        - Popolarità
-        - Distanza geografica (regional bias)
-        - ISLAND RESTRICTION: Sardinia stays isolated (no trains to mainland)
+        Step 1: Select the top N candidate cities by score.
+
+        The score considers the number of attractions in preferred categories,
+        average rating, popularity, geographic distance (regional bias), and
+        an island restriction where Sardinia remains isolated (no trains to the mainland).
         """
-        # Define island cities - NO trains to mainland Italy!
+        # Define island cities. There are no trains to the mainland.
         sardinian_cities = {'Cagliari', 'Sassari', 'Nuoro', 'Oristano'}
         
-        # Check if start is in Sardinia
+        # Check whether the trip starts in Sardinia
         start_in_sardinia = start in sardinian_cities
         
         all_cities = self.city_db.get_all_cities()
         scored_cities = []
         
-        # Get start city coordinates for route-based scoring
+        # Get coordinates for route based scoring
         start_city_data = self.city_db.get_city_by_name(start)
         end_city_data = self.city_db.get_city_by_name(end)
         start_lat = start_city_data['coordinates']['lat'] if start_city_data else None
@@ -251,7 +245,7 @@ class DPItineraryPlanner:
         end_lat = end_city_data['coordinates']['lat'] if end_city_data else None
         end_lon = end_city_data['coordinates']['lon'] if end_city_data else None
         
-        # Pre-calculate total distance start->end (only once!)
+        # Precompute the total distance from start to end (only once)
         total_distance = 0
         if start_lat and start_lon and end_lat and end_lon:
             from math import radians, cos, sin, asin, sqrt
@@ -265,23 +259,23 @@ class DPItineraryPlanner:
         for city_data in all_cities:
             city_name = city_data['name']
             
-            # CRITICAL: If trip starts in Sardinia, ONLY consider Sardinian cities
-            # (no trains connect Sardinia to mainland - ferry only)
+            # If the trip starts in Sardinia, only consider Sardinian cities.
+            # No trains connect Sardinia to the mainland.
             city_in_sardinia = city_name in sardinian_cities
             
             if start_in_sardinia and not city_in_sardinia:
-                # Skip mainland cities if starting from Sardinia
+                # Skip mainland cities when starting from Sardinia
                 continue
             elif not start_in_sardinia and city_in_sardinia:
-                # Skip Sardinian cities if starting from mainland
+                # Skip Sardinian cities when starting from the mainland
                 continue
             
-            # Sempre includi start e end
+            # Always include start and end
             if city_name == start or city_name == end:
                 scored_cities.append((city_name, 999999.0))
                 continue
             
-            # Calcola score con regional bias
+            # Compute the base score with regional bias
             score = self._calculate_province_score(city_data, interests)
             
             # Add route proximity bonus: favor cities along the path from start to end
@@ -311,22 +305,22 @@ class DPItineraryPlanner:
                 
                 # For open trips (start == end), use distance from start only
                 if start == end:
-                    # Exponential proximity bonus - closer cities get MUCH more weight
+                    # Exponential proximity bonus, closer cities get much more weight
                     if dist_from_start < 100:
                         route_bonus = 450  # Very close (within region) - MASSIVE boost
                     elif dist_from_start < 200:
                         route_bonus = 320  # Nearby regions - major boost
                     elif dist_from_start < 350:
-                        route_bonus = 170  # Same-day reachable
+                        route_bonus = 170  # Same day reachable
                     elif dist_from_start < 500:
                         route_bonus = 50   # Long day trip
                     elif dist_from_start < 700:
-                        route_bonus = 0    # Very far - no bonus
+                        route_bonus = 0    # Very far, no bonus
                     else:
-                        route_bonus = -100  # Too far - strong penalty!
+                        route_bonus = -100  # Too far, strong penalty
                 else:
-                    # For point-to-point trips: bonus for cities ON the route
-                    # If dist_from_start + dist_from_end ≈ total_distance, city is on path
+                    # For point to point trips, bonus for cities on the route.
+                    # If dist_from_start plus dist_from_end is near total_distance, the city is on the path.
                     detour = (dist_from_start + dist_from_end) - total_distance
                     if detour < 50:  # On the direct route
                         route_bonus = 320
@@ -341,7 +335,7 @@ class DPItineraryPlanner:
             
             scored_cities.append((city_name, score))
         
-        # Ordina e prendi top-N
+        # Sort and take the top N
         scored_cities.sort(key=lambda x: x[1], reverse=True)
         
         # Top candidates + start + end
@@ -375,8 +369,9 @@ class DPItineraryPlanner:
         interests: List[str]
     ) -> float:
         """
-        Score provincia basato su attrazioni, interessi, e importanza città
-        Balanced scoring without proximity (handled separately)
+        City score based on attractions, interests, and city importance.
+
+        This is a balanced score without proximity, since proximity is handled separately.
         """
         attractions = city_data.get('attractions', [])
         if not attractions:
@@ -385,18 +380,18 @@ class DPItineraryPlanner:
         # City importance rating (1-10: major cities get higher score)
         city_importance = city_data.get('importance', 5.0)
         
-        # Conta attrazioni per categoria
+        # Count attractions by category
         category_match = 0
         total_rating = 0
         total_popularity = 0
         
         for attr in attractions:
-            # Match categorie
+            # Category match
             attr_cats = attr.get('categories', [])
             if any(cat in interests for cat in attr_cats):
                 category_match += 1
             
-            # Rating e popolarità
+            # Rating and popularity
             total_rating += attr.get('rating', 3.0)
             total_popularity += attr.get('popularity', 50)
         
@@ -423,13 +418,12 @@ class DPItineraryPlanner:
         force_include: List[str] = None
     ) -> List[str]:
         """
-        Seleziona le destinazioni più rilevanti per una città origine
-        (riduce numero chiamate API)
-        
-        Criteri:
-        - Distanza geografica (preferenza vicini)
-        - Score provincia (preferenza più interessanti)
-        - force_include: città da includere sempre (es. destinazione finale)
+        Select the most relevant destinations for an origin city.
+
+        This reduces the number of API calls.
+
+        Criteria include geographic distance (prefer nearby), city attractiveness,
+        and an optional force_include list that is always included (for example the final destination).
         """
         origin_data = self.city_db.get_city_by_name(origin)
         if not origin_data:
@@ -440,7 +434,7 @@ class DPItineraryPlanner:
         origin_lat = origin_data['coordinates']['lat']
         origin_lon = origin_data['coordinates']['lon']
         
-        # Calcola score + distanza per ogni candidato
+        # Compute score and distance for each candidate
         scored_dests = []
         for dest in candidates:
             if dest == origin:
@@ -450,7 +444,7 @@ class DPItineraryPlanner:
             if not dest_data:
                 continue
             
-            # Distanza
+            # Distance
             dest_lat = dest_data['coordinates']['lat']
             dest_lon = dest_data['coordinates']['lon']
             
@@ -462,14 +456,14 @@ class DPItineraryPlanner:
             c = 2 * asin(sqrt(a))
             distance_km = 6371 * c
             
-            # Score: preferenza province vicine (max 500km) con buon rating
+            # Prefer nearby cities (within about 500 km) with good attractiveness
             proximity_score = max(0, 500 - distance_km)
             attraction_score = len(dest_data.get('attractions', [])) * 2
             
             total_score = proximity_score + attraction_score
             scored_dests.append((dest, total_score))
         
-        # Ordina e prendi top-N
+        # Sort and take the top N
         scored_dests.sort(key=lambda x: x[1], reverse=True)
         
         # CRITICAL FIX: Ensure force_include cities are ALWAYS included first
@@ -498,7 +492,7 @@ class DPItineraryPlanner:
         end: str
     ) -> Dict:
         """
-        Step 2: Costruisce matrice treni con API reali
+        Step 2: Build the train matrix using live API calls.
         
         Returns:
             train_matrix[day][origin][dest] = {
@@ -513,7 +507,7 @@ class DPItineraryPlanner:
         
         train_matrix = {day: {} for day in range(1, num_days + 1)}
         
-        # Per ogni giorno
+        # For each day
         for day in range(1, num_days + 1):
             # Prefer morning departures (09:00-11:00) for all days
             search_hour = 9
@@ -527,13 +521,13 @@ class DPItineraryPlanner:
             if schedule_datetime.hour < 8:
                 schedule_datetime = schedule_datetime.replace(hour=8, minute=0)
             
-            # Per ogni città di origine
+            # For each origin city
             for origin in candidates:
                 train_matrix[day][origin] = {}
                 
-                # OTTIMIZZAZIONE: per ogni origine, considera solo le MAX_CONNECTIONS_PER_CITY
-                # destinazioni più vicine/rilevanti (riduce chiamate API)
-                # IMPORTANTE: Sempre includere destinazione finale per garantire percorso valido
+                # Optimization: for each origin, consider only MAX_CONNECTIONS_PER_CITY destinations.
+                # These are the closest or most relevant ones, reducing API calls.
+                # Always include the final destination to keep the route feasible.
                 candidate_dests = self._select_relevant_destinations(
                     origin,
                     candidates,
@@ -545,7 +539,7 @@ class DPItineraryPlanner:
                     if origin == dest:
                         continue
                     
-                    # Cerca treno migliore per questa coppia (API reale con fallback)
+                    # Find the best train for this pair (live API with fallback)
                     train_info = self._find_best_train(origin, dest, schedule_datetime)
                     
                     if train_info:
@@ -560,18 +554,18 @@ class DPItineraryPlanner:
         date: datetime
     ) -> Optional[Dict]:
         """
-        Trova il miglior treno per coppia città + data
+        Find the best train for a city pair and a given date.
 
-        Strategia:
-        - Usa endpoint funzionanti ViaggiaTreno: `partenze` + `andamentoTreno`
-        - Se non disponibili, fallback geometrico
+        Strategy
+        1) Use working ViaggiaTreno endpoints: `partenze` plus `andamentoTreno`
+        2) If not available, fall back to a geometric estimate
         """
         # Controlla cache (include time-of-day to avoid reusing a morning train for afternoon searches)
         cache_key = (origin_city, dest_city, date.strftime('%Y-%m-%d %H:%M'))
         if cache_key in self.train_cache:
             return self.train_cache[cache_key]
         
-        # Ottieni città dal database
+        # Get cities from the database
         origin_data = self.city_db.get_city_by_name(origin_city)
         dest_data = self.city_db.get_city_by_name(dest_city)
         
@@ -586,7 +580,7 @@ class DPItineraryPlanner:
         except Exception as e:
             print(f"    ⚠️  API error {origin_city}->{dest_city}: {e}")
 
-        # Fallback geometrico
+        # Geometric fallback
         est = self._estimate_train_connection(origin_data, dest_data)
         self.train_cache[cache_key] = est
         return est
@@ -912,7 +906,7 @@ class DPItineraryPlanner:
         dest_data: Dict
     ) -> Dict:
         """
-        Fallback: stima connessione ferroviaria da distanza geografica
+        Fallback: estimate a rail connection from geographic distance.
         """
         from math import radians, cos, sin, asin, sqrt
         
@@ -959,9 +953,9 @@ class DPItineraryPlanner:
             (origin_name in mainland_cities and dest_name in sicilian_cities)
         )
         
-        # Stima tempo: velocità variabile basata su distanza
-        # Treni regionali: ~80 km/h, IC: ~120 km/h, AV: ~180 km/h
-        # Usa velocità conservativa per evitare sottostime
+        # Estimate duration using distance dependent average speed.
+        # Regional trains about 80 km/h, IC about 120 km/h, high speed about 180 km/h.
+        # Use conservative speeds to avoid underestimates.
         if is_sicily_crossing:
             # Sicily-mainland: add ferry time + slower route
             avg_speed = 60  # Very slow due to ferry and connections
@@ -985,7 +979,7 @@ class DPItineraryPlanner:
 
         return {
             'train': None,
-            'train_number': 'STIMATO',
+            'train_number': 'ESTIMATED',
             'train_type': 'estimated',
             'travel_time': round(estimated_hours, 2),
             'departure': departure_time,
@@ -993,13 +987,13 @@ class DPItineraryPlanner:
             'price': round(float(estimated_price), 2),
             'price_estimated': True,
             'changes': 0,
-            'numero_treno': 'STIMATO',
+            'numero_treno': 'ESTIMATED',
             'estimated': True,
             'real_data': False
         }
     
     def _parse_duration(self, duration_str: str) -> float:
-        """Converte 'HH:MM' in ore (float)"""
+        """Convert 'HH:MM' to hours as a float."""
         try:
             parts = duration_str.split(':')
             return float(parts[0]) + float(parts[1]) / 60.0
@@ -1016,16 +1010,16 @@ class DPItineraryPlanner:
         interests: List[str]
     ) -> Tuple[List[str], Dict]:
         """
-        Step 3: Dynamic Programming per sequenza ottimale
-        
-        State: dp[d][B] = max score raggiungendo provincia B al giorno d
-        
-        Transizione:
-        - da A a B se:
-          travel_time(A,B,d) + MIN_STAY_HOURS <= HOURS_PER_DAY
-        
-        Returns:
-            (route, dp_scores)
+                Step 3: Dynamic Programming for the best city sequence.
+
+                State definition
+                dp[d][B] is the best score when reaching city B on day d.
+
+                Transition rule
+                Move from A to B when travel_time(A, B, d) plus MIN_STAY_HOURS is within HOURS_PER_DAY.
+
+                Returns:
+                        A tuple of (route, dp_scores)
         """
         print("\n🧮 Step 3: DP Route Optimization")
         print(f"  📍 Start: {start}, End: {end}, Days: {num_days}")
@@ -1035,7 +1029,7 @@ class DPItineraryPlanner:
             print(f"  ⚠️  WARNING: Destination {end} NOT in candidate list!")
             print(f"  Candidates: {candidates}")
         
-        # Inizializzazione
+        # Initialization
         dp = [{} for _ in range(num_days + 1)]
         prev = [{} for _ in range(num_days + 1)]
         visited_cities = [{} for _ in range(num_days + 1)]  # Track cities visited up to day d
@@ -1067,7 +1061,7 @@ class DPItineraryPlanner:
         max_unique_cities = len(candidates)
         need_multi_day_stays = num_days > max_unique_cities
         
-        # DP: giorni 1 -> N
+        # DP loop from day 1 to day N
         for d in range(1, num_days):
             if not dp[d]:
                 continue
@@ -1078,7 +1072,7 @@ class DPItineraryPlanner:
                 if dp[d][A] == float('-inf'):
                     continue
                 
-                # Prossimo giorno
+                # Next day
                 next_day = d + 1
                 
                 # Check how many consecutive days we've been in city A
@@ -1144,7 +1138,7 @@ class DPItineraryPlanner:
                     print(f"    {A} -> {A} (stay): BLOCKED - already {days_in_A} days (max={max_stay_days})")
                 
                 # Option 2: MOVE to different city B
-                # Prova tutte le destinazioni B
+                # Try all destinations B
                 for B in candidates:
                     if B == A:
                         continue
@@ -1152,9 +1146,9 @@ class DPItineraryPlanner:
                     # CRITICAL: Prevent revisiting cities already in the route
                     cities_visited_so_far = visited_cities[d].get(A, set())
                     if B in cities_visited_so_far:
-                        continue  # Skip - already visited this city
+                        continue  # Skip, already visited this city
                     
-                    # Controlla se esiste treno A -> B per giorno next_day
+                    # Check whether a train exists from A to B on next_day
                     if next_day not in train_matrix:
                         continue
                     if A not in train_matrix[next_day]:
@@ -1165,11 +1159,11 @@ class DPItineraryPlanner:
                     train_info = train_matrix[next_day][A][B]
                     travel_time = train_info['travel_time'] + self.TRAIN_BUFFER_HOURS
                     
-                    # Vincolo: viaggio + min stay <= ore giornata
+                    # Constraint: travel plus minimum stay must fit in the day
                     if travel_time + self.MIN_STAY_HOURS > self.HOURS_PER_DAY:
                         continue
                     
-                    # Vincolo: max ore treno
+                    # Constraint: max train hours per day
                     if travel_time > self.MAX_TRAIN_HOURS_PER_DAY:
                         continue
                     
@@ -1203,7 +1197,7 @@ class DPItineraryPlanner:
                         consecutive_days[next_day][B] = 1  # Reset to 1 when moving to new city
                         print(f"    {A} -> {B}: score={new_score:.2f} (travel={travel_time:.1f}h)")
         
-        # Backtrack: trova percorso migliore che arriva a 'end'
+        # Backtrack: find the best path that reaches `end`
         # IMPORTANT: For best experience, prefer using ALL available days
         # For open-ended trips (start == end), prefer ending at a DIFFERENT city
         best_day = -1
@@ -1386,7 +1380,7 @@ class DPItineraryPlanner:
             
             return route, dp
         
-        # Ricostruisci percorso
+        # Reconstruct the route
         route = []
         current = end
         for d in range(best_day, 0, -1):
@@ -1397,7 +1391,7 @@ class DPItineraryPlanner:
         
         route.reverse()
         
-        # NO PADDING - respect MAX_DAYS_PER_CITY constraint
+        # NO PADDING, respect MAX_DAYS_PER_CITY constraint
         # If DP found shorter route, that's the best valid route
         # Padding would violate MAX_DAYS_PER_CITY=2
         
@@ -1415,9 +1409,9 @@ class DPItineraryPlanner:
         train_matrix: Dict
     ) -> Dict[str, int]:
         """
-        Step 4: Alloca giorni a province (minimo 1 per provincia)
-        
-        NOTE: route now contains day-by-day sequence with possible duplicates
+        Step 4: Allocate days to cities (at least one per city).
+
+        NOTE: `route` contains a day by day sequence with possible duplicates.
         e.g., ['Trieste', 'Trieste', 'Firenze', 'Roma', 'Roma']
         This function just counts consecutive occurrences.
         """
@@ -1449,7 +1443,7 @@ class DPItineraryPlanner:
         interests: List[str]
     ) -> List[DaySchedule]:
         """
-        Step 5: Genera schedule dettagliato con Knapsack per attrazioni
+        Step 5: Generate a detailed schedule with attraction selection.
         
         IMPORTANT: Iterate through route in order, not day_allocation.items()
         """
@@ -1461,7 +1455,7 @@ class DPItineraryPlanner:
         prev_city = None
         used_attractions = {}  # Track attractions already used per city
         
-        # IMPORTANT: Iterate day-by-day through route (which may have duplicates)
+        # IMPORTANT: Iterate day by day through route (which may have duplicates)
         # Example: ['Trieste', 'Trieste', 'Firenze', 'Roma', 'Roma']
         # This ensures we generate schedule for each day correctly
         for day_idx, city in enumerate(route):
@@ -1479,7 +1473,7 @@ class DPItineraryPlanner:
             if day_idx > 0 and route[day_idx - 1] != city:
                 # We're moving from a different city
                 prev_city = route[day_idx - 1]
-                # Cerca treno nella matrice
+                # Look up the train in the matrix
                 if day_counter in train_matrix:
                     if prev_city in train_matrix[day_counter]:
                         if city in train_matrix[day_counter][prev_city]:
@@ -1489,16 +1483,16 @@ class DPItineraryPlanner:
                             from_city_for_day = prev_city
                             print(f"    🚂 Treno: {prev_city} → {city}, {travel_time:.1f}h")
                 
-            # Running clock: giornata inizia alle 8:00 (ora 8)
+            # Running clock: the day starts at 08:00
             running_clock = 8.0
             
-            # Aggiungi tempo viaggio treno
+            # Add train travel time
             running_clock += travel_time
             
-            # Limite orario: 21:00 (ora 21)
+            # Time limit: 21:00
             max_clock = 21.0
             
-            # Knapsack: seleziona attrazioni con running clock
+            # Select attractions using the running clock
             pois = self._knapsack_attractions_with_clock(
                 city,
                 interests,
@@ -1507,17 +1501,17 @@ class DPItineraryPlanner:
                 exclude_names=used_attractions[city]
             )
             
-            # Calcola ore disponibili totali per backward compatibility
+            # Total available hours (kept for backward compatibility)
             available_hours = max_clock - running_clock
             
-            # Aggiungi le attrazioni selezionate alla lista used
+            # Mark selected attractions as used
             for poi in pois:
                 used_attractions[city].add(poi['name'])
             
-            # Calcola running clock finale (dopo POI)
+            # Final running clock after POIs
             final_clock = running_clock + (len(pois) * 3.0)
             
-            # Costo giornata
+            # Daily cost
             daily_cost = self._estimate_daily_cost(city, pois, travel_time, morning_train)
             
             day_schedule = DaySchedule(
@@ -1537,7 +1531,7 @@ class DPItineraryPlanner:
             
             print(f"    Giorno {day_counter}: {len(pois)} POI, €{daily_cost:.2f} (clock: {final_clock:.1f}h/{max_clock:.0f}h)")
             
-            # Verifica se clock supera limite (21:00)
+            # Check whether the time limit is exceeded (21:00)
             if final_clock > max_clock:
                 print(f"    ⚠️  Clock limit reached ({final_clock:.1f}h > {max_clock:.0f}h) - day ended")
             
@@ -1555,13 +1549,15 @@ class DPItineraryPlanner:
         exclude_names: set = None
     ) -> List[Dict]:
         """
-        Knapsack con running clock: ogni POI dura 3h, limita a ora 21:00
-        
-        running_clock: ora corrente (es. 8.0 per le 8:00, + tempo treno)
-        max_clock: ora limite (21.0 = 21:00)
-        exclude_names: set di nomi attrazioni da escludere
+        Knapsack with a running clock.
+
+        Each POI takes 3 hours and the day ends at 21:00.
+
+        running_clock is the current hour (for example 8.0 for 08:00 plus train time)
+        max_clock is the time limit (21.0 for 21:00)
+        exclude_names is a set of attraction names to exclude
         """
-        POI_DURATION = 3.0  # Ogni attività dura 3 ore
+        POI_DURATION = 3.0  # Each activity takes 3 hours
         
         if exclude_names is None:
             exclude_names = set()
@@ -1574,19 +1570,19 @@ class DPItineraryPlanner:
         if not attractions:
             return []
         
-        # Filtra attrazioni già usate
+        # Filter out attractions already used
         attractions = [a for a in attractions if a['name'] not in exclude_names]
         
         if not attractions:
             return []
         
-        # Score per attrazione
+        # Score each attraction
         scored = []
         for attr in attractions:
-            # Match interessi
+            # Match interests
             match_score = sum(1 for cat in attr.get('categories', []) if cat in interests)
             
-            # Score composito
+            # Composite score
             score = (
                 match_score * 10 +
                 attr.get('rating', 5) * 2 +
@@ -1597,28 +1593,27 @@ class DPItineraryPlanner:
             scored.append({
                 **attr,
                 'score': score,
-                'duration_hours': POI_DURATION  # Forza 3h per ogni POI
+                'duration_hours': POI_DURATION  # Force 3 hours per POI
             })
         
-        # Ordina per score decrescente
+        # Sort by descending score
         scored.sort(key=lambda x: x['score'], reverse=True)
         
-        # Seleziona POI con running clock
+        # Select POIs using the running clock
         selected = []
         current_clock = running_clock
         
         for attr in scored:
-            # Verifica se c'è spazio per questa attività (non superare ore 21:00)
+            # Check if there is enough time for this activity (do not exceed 21:00)
             if current_clock + POI_DURATION <= max_clock:
                 selected.append(attr)
                 current_clock += POI_DURATION
                 
-                # Max 3 attrazioni/giorno
+                # Max 3 attractions per day
                 if len(selected) >= 3:
                     break
         
-        # Differenzia tra 2 e 3 POI: accetta anche 2 se non c'è spazio per la terza
-        # (il loop sopra già gestisce questo)
+        # Accept 2 POIs when there is no time for a third.
         
         return selected
     
@@ -1630,10 +1625,10 @@ class DPItineraryPlanner:
         exclude_names: set = None
     ) -> List[Dict]:
         """
-        Knapsack 0/1 per selezione attrazioni ottimale (legacy)
-        
-        Obiettivo: massimizzare score sotto vincolo tempo
-        exclude_names: set di nomi attrazioni da escludere (già usate in giorni precedenti)
+        Knapsack 0/1 for optimal attraction selection (legacy).
+
+        Objective is to maximize score under a time constraint.
+        exclude_names is a set of attraction names to exclude (already used on previous days).
         """
         if exclude_names is None:
             exclude_names = set()
@@ -1646,19 +1641,19 @@ class DPItineraryPlanner:
         if not attractions:
             return []
         
-        # Filtra attrazioni già usate
+        # Filter out attractions already used
         attractions = [a for a in attractions if a['name'] not in exclude_names]
         
         if not attractions:
             return []
         
-        # Score per attrazione
+        # Score each attraction
         scored = []
         for attr in attractions:
-            # Match interessi
+            # Match interests
             match_score = sum(1 for cat in attr.get('categories', []) if cat in interests)
             
-            # Score composito
+            # Composite score
             score = (
                 match_score * 10 +
                 attr.get('rating', 5) * 2 +
@@ -1672,7 +1667,7 @@ class DPItineraryPlanner:
                 'duration_hours': attr.get('duration_hours', 2.0)
             })
         
-        # Ordina per score/duration (greedy per MVP)
+        # Sort by score per duration (greedy MVP)
         scored.sort(key=lambda x: x['score'] / x['duration_hours'], reverse=True)
         
         # Knapsack greedy
@@ -1684,10 +1679,10 @@ class DPItineraryPlanner:
                 selected.append(attr)
                 total_time += attr['duration_hours']
                 
-                if len(selected) >= 3:  # Max 3 attrazioni/giorno
+                if len(selected) >= 3:  # Max 3 attractions per day
                     break
         
-        # Assicura almeno 2 attrazioni se disponibili
+        # Ensure at least 2 attractions when available
         if len(selected) < 2 and len(scored) >= 2:
             selected = scored[:2]
         
@@ -1701,13 +1696,14 @@ class DPItineraryPlanner:
         morning_train: Optional[Dict]
     ) -> float:
         """
-        Stima costo giornaliero: SOLO attrazioni + treno
-        (rimossi pasti e alloggio per accuratezza)
+        Estimate daily cost using only attractions plus train.
+
+        Meals and accommodation are excluded for accuracy.
         """
-        # Costo attrazioni (dalle 2-3 POI selezionate)
+        # Attraction cost (from the selected POIs)
         attr_cost = sum(poi.get('cost_euro', poi.get('cost', 0)) for poi in pois)
         
-        # Costo treno (se presente)
+        # Train cost (if present)
         train_cost = morning_train.get('price', 0) if morning_train else 0
         
         return attr_cost + train_cost
@@ -1718,15 +1714,15 @@ class DPItineraryPlanner:
         start_date: datetime
     ) -> None:
         """
-        Step 6: Arricchisce lo schedule con dati treni reali per TUTTE le tratte
-        
-        Strategia ESTESA:
-        1. Prova a trovare treni reali per OGNI segmento del percorso
-        2. Se un treno diretto non esiste, prova percorsi con città intermedie
-        3. Se nessun percorso reale trovato, usa fallback geometrico
-        4. Traccia quali tratte hanno dati reali vs stime
-        
-        Questo garantisce che l'intero itinerario sia verificato con dati API reali
+        Step 6: Enrich the schedule with real train data for all legs.
+
+        Extended strategy
+        1) Try to find real trains for every segment
+        2) If a direct train does not exist, try routes with an intermediate city
+        3) If no real route is found, use the geometric fallback
+        4) Track which legs have real data versus estimates
+
+        This aims to validate the full itinerary using live API data.
         """
         print(f"  📊 Verifico {len([d for d in schedule if d.morning_train])} tratte con API Trenitalia...")
         
@@ -1735,14 +1731,14 @@ class DPItineraryPlanner:
         alternative_routes_found = 0
         
         for day in schedule:
-            # Solo per giorni con treno
+            # Only for days that include a train leg
             if not day.morning_train or not day.from_city:
                 continue
             
             origin = day.from_city
             dest = day.city
             
-            # Se già ha dati reali, salta
+            # Skip if already real data
             if day.morning_train.get('real_data'):
                 print(f"  ✓ Day {day.day_number}: {origin}→{dest} già con dati reali")
                 real_trains_found += 1
@@ -1750,15 +1746,15 @@ class DPItineraryPlanner:
             
             print(f"  🔍 Day {day.day_number}: Cerco treno reale {origin}→{dest}")
             
-            # Calcola datetime per questo giorno
+            # Compute the datetime for this day
             search_hour = 9 if day.day_number == 1 else 13
             current_datetime = start_date + timedelta(days=day.day_number - 1)
             current_datetime = current_datetime.replace(hour=search_hour, minute=0)
             
-            # Strategia multi-livello
+            # Multi level strategy
             real_train = None
             
-            # LIVELLO 1: Prova treno diretto
+            # Level 1: try a direct train
             try:
                 real_train = self._find_best_train(
                     origin,
@@ -1777,7 +1773,7 @@ class DPItineraryPlanner:
             except Exception as e:
                 print(f"    ⚠️ Errore ricerca diretta: {e}")
             
-            # LIVELLO 2: Prova con città intermedia (se distanza > 300km)
+            # Level 2: try an intermediate city for long distances
             origin_data = self.city_db.get_city_by_name(origin)
             dest_data = self.city_db.get_city_by_name(dest)
             
@@ -1789,7 +1785,7 @@ class DPItineraryPlanner:
                     dest_data['coordinates']['lon']
                 )
                 
-                if distance > 300:  # Tratte lunghe potrebbero richiedere cambio
+                if distance > 300:  # Long legs may require a change
                     print(f"    🔄 Distanza {distance:.0f}km: provo percorsi alternativi...")
                     
                     alternative = self._find_alternative_route(
@@ -1808,11 +1804,11 @@ class DPItineraryPlanner:
                         alternative_routes_found += 1
                         continue
             
-            # LIVELLO 3: Fallback geometrico
+            # Level 3: geometric fallback
             print(f"    ⚠️ Nessun treno reale trovato, uso stima geometrica")
             fallback_used += 1
         
-        # Riepilogo finale
+        # Final summary
         total_trains = real_trains_found + fallback_used
         if total_trains > 0:
             coverage = (real_trains_found / total_trains) * 100
@@ -1829,22 +1825,22 @@ class DPItineraryPlanner:
         departure_time: datetime
     ) -> Optional[Dict]:
         """
-        Trova percorsi alternativi con città intermedie se non esiste treno diretto
-        
-        Strategia:
-        1. Identifica città intermedie plausibili sulla rotta
-        2. Cerca combinazioni origin→via→dest
-        3. Valida tempi di attesa ai cambi (10min-3h)
-        4. Ritorna il percorso multi-segmento migliore
+        Find alternative routes using an intermediate city when no direct train is found.
+
+        Strategy
+        1) Identify plausible intermediate cities along the route
+        2) Try combinations origin to via to destination
+        3) Validate transfer waiting times (10 minutes to 3 hours)
+        4) Return the best multi segment route
         """
-        # Ottieni coordinate
+        # Get coordinates
         origin_data = self.city_db.get_city_by_name(origin)
         dest_data = self.city_db.get_city_by_name(dest)
         
         if not origin_data or not dest_data:
             return None
         
-        # Trova città intermedie candidate (lungo la rotta)
+        # Find intermediate candidate cities along the route
         all_cities = self.city_db.get_all_cities()
         intermediate_candidates = []
         
@@ -1853,7 +1849,7 @@ class DPItineraryPlanner:
             if city_name == origin or city_name == dest:
                 continue
             
-            # Verifica se sulla rotta (usando distanza come proxy)
+            # Check if it is on the route (using distance as a proxy)
             dist_origin_via = self._calculate_distance(
                 origin_data['coordinates']['lat'],
                 origin_data['coordinates']['lon'],
@@ -1875,7 +1871,7 @@ class DPItineraryPlanner:
                 dest_data['coordinates']['lon']
             )
             
-            # Se il percorso via questa città è < 50% più lungo, considerala
+            # If the detour via this city is less than 50 percent longer, consider it
             detour = (dist_origin_via + dist_via_dest) - dist_direct
             if detour < dist_direct * 0.5 and detour < 150:  # Max 150km detour
                 intermediate_candidates.append({
@@ -1884,13 +1880,13 @@ class DPItineraryPlanner:
                     'dist_from_origin': dist_origin_via
                 })
         
-        # Ordina per detour minimo
+        # Sort by smallest detour
         intermediate_candidates.sort(key=lambda x: x['detour'])
         
-        # Prova le migliori 3 città intermedie
+        # Try the top 3 intermediate cities
         for via_city in intermediate_candidates[:3]:
             try:
-                # Segmento 1: origin → via
+            # Segment 1: origin to via
                 seg1 = self._find_best_train(
                     origin,
                     via_city['name'],
@@ -1900,7 +1896,7 @@ class DPItineraryPlanner:
                 if not seg1 or not seg1.get('real_data'):
                     continue
                 
-                # Calcola orario arrivo a città intermedia
+                # Compute arrival time at the intermediate city
                 from datetime import datetime
                 arr1_time = datetime.strptime(seg1['arrival'], '%H:%M')
                 arr1_datetime = departure_time.replace(
@@ -1908,10 +1904,10 @@ class DPItineraryPlanner:
                     minute=arr1_time.minute
                 )
                 
-                # Aggiungi 30min di buffer per cambio
+                # Add a 30 minute transfer buffer
                 dep2_datetime = arr1_datetime + timedelta(minutes=30)
                 
-                # Segmento 2: via → dest
+                # Segment 2: via to destination
                 seg2 = self._find_best_train(
                     via_city['name'],
                     dest,
@@ -1921,7 +1917,7 @@ class DPItineraryPlanner:
                 if not seg2 or not seg2.get('real_data'):
                     continue
                 
-                # Verifica tempo di attesa ragionevole
+                # Validate a reasonable transfer waiting time
                 dep2_time = datetime.strptime(seg2['departure'], '%H:%M')
                 dep2_datetime_actual = arr1_datetime.replace(
                     hour=dep2_time.hour,
@@ -1930,10 +1926,10 @@ class DPItineraryPlanner:
                 
                 wait_minutes = (dep2_datetime_actual - arr1_datetime).total_seconds() / 60
                 
-                if wait_minutes < 10 or wait_minutes > 180:  # 10min-3h
+                if wait_minutes < 10 or wait_minutes > 180:  # 10 minutes to 3 hours
                     continue
                 
-                # Successo! Crea percorso combinato
+                # Success, build the combined route
                 total_duration = seg1['travel_time'] + seg2['travel_time'] + (wait_minutes / 60)
                 
                 return {
@@ -1961,7 +1957,7 @@ class DPItineraryPlanner:
 
 def demo_dp_planner():
     """
-    Demo: Milano -> Roma in 4 giorni con DP
+    Demo: Milano to Roma in 4 days using DP.
     """
     print("\n🚀 DP ITINERARY PLANNER DEMO")
     print("="*70)
@@ -1978,7 +1974,7 @@ def demo_dp_planner():
     planner = DPItineraryPlanner()
     schedule = planner.plan_trip(trip)
     
-    # Print risultato
+    # Print result
     print("\n" + "="*70)
     print("📋 ITINERARIO FINALE")
     print("="*70)

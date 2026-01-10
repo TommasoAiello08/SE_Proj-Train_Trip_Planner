@@ -176,7 +176,7 @@ class CityDatabase:
         return results
     
     def search_by_region(self, region: str) -> List[Dict]:
-        """Trova città per regione"""
+        """Find cities by region."""
         results = []
         region_lower = region.lower()
         
@@ -187,11 +187,11 @@ class CityDatabase:
         return results
     
     def get_cities_in_radius(self, lat: float, lon: float, radius_km: float) -> List[Dict]:
-        """Trova città entro un raggio geografico"""
+        """Find cities within a geographic radius."""
         from math import radians, cos, sin, asin, sqrt
         
         def haversine(lat1, lon1, lat2, lon2):
-            """Calcola distanza in km tra due coordinate"""
+            """Compute distance in km between two coordinates."""
             lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
             dlat = lat2 - lat1
             dlon = lon2 - lon1
@@ -212,26 +212,26 @@ class CityDatabase:
                     'distance_km': round(distance, 1)
                 })
         
-        # Ordina per distanza
+        # Sort by distance
         results.sort(key=lambda x: x['distance_km'])
         return results
     
     def calculate_city_score(self, city: Dict, user_interests: List[str], 
                             travel_time_hours: float = 0) -> float:
         """
-        Calcola score di una città basato su interessi utente e tempo viaggio
-        
+        Compute a city score based on user interests and travel time.
+
         Args:
-            city: Dati città
-            user_interests: Lista categorie interessanti per l'utente
-            travel_time_hours: Tempo viaggio in ore
-        
+            city: City data
+            user_interests: List of user interest categories
+            travel_time_hours: Travel time in hours
+
         Returns:
-            Score 0-1
+            Score in the 0-1 range
         """
         score = 0.0
         
-        # 1. Match con interessi (40%)
+        # 1) Interest match (40%)
         if user_interests:
             city_categories = [c.lower() for c in city['categories']]
             user_interests_lower = [i.lower() for i in user_interests]
@@ -241,30 +241,29 @@ class CityDatabase:
             interest_score = matches / len(user_interests_lower)
             score += interest_score * 0.4
         else:
-            score += 0.4  # Nessuna preferenza = considera tutto
+            score += 0.4  # No preferences means consider everything
         
-        # 2. Attrazioni (30%)
+        # 2) Attractions (30%)
         attractions = city.get('attractions', [])
         if attractions:
             avg_rating = sum(a.get('rating', 8.0) for a in attractions) / len(attractions)
-            attraction_score = avg_rating / 10.0  # Normalizza a 0-1
+            attraction_score = avg_rating / 10.0  # Normalize to 0-1
             score += attraction_score * 0.3
         
-        # 3. Popolarità (20%)
+        # 3) Popularity (20%)
         population = city.get('population') or 0
         if population > 0:
-            popularity_score = min(population / 3000000, 1.0)  # Normalizza
+            popularity_score = min(population / 3000000, 1.0)  # Normalize
             score += popularity_score * 0.2
         else:
-            # Se non abbiamo population, usiamo numero di attrazioni come proxy
+            # If population is missing, use number of attractions as a proxy
             if attractions:
                 popularity_score = min(len(attractions) / 30, 1.0)
                 score += popularity_score * 0.2
             else:
-                score += 0.1  # Score minimo
+                score += 0.1  # Minimum score
         
-        # 4. Penalità distanza (10%)
-        # Meno tempo viaggio = migliore
+        # 4) Distance penalty (10%). Less travel time is better.
         if travel_time_hours > 0:
             distance_score = max(0, 1 - (travel_time_hours / 6))  # 6h = score 0
             score += distance_score * 0.1
@@ -274,13 +273,13 @@ class CityDatabase:
         return min(score, 1.0)
     
     def get_top_attractions(self, city_id: str, limit: int = 5) -> List[Dict]:
-        """Ottieni top attrazioni per una città"""
+        """Get the top attractions for a city."""
         city = self.get_city(city_id)
         if not city:
             return []
         
         attractions = city.get('attractions', [])
-        # Ordina per rating * popularity
+        # Sort by rating * popularity
         attractions_scored = [
             {**a, 'score': a['rating'] * a.get('popularity', 5) / 10}
             for a in attractions
@@ -290,25 +289,25 @@ class CityDatabase:
         return attractions_scored[:limit]
     
     def estimate_daily_cost(self, city_id: str, include_attractions: bool = True) -> float:
-        """Stima costo giornaliero in una città"""
+        """Estimate daily cost in a city."""
         city = self.get_city(city_id)
         if not city:
             return 100.0  # Default
         
         cost = city.get('avg_hotel_price', 80)  # Hotel
-        cost += 40  # Cibo medio
+        cost += 40  # Average food
         
         if include_attractions:
             attractions = city.get('attractions', [])
             if attractions:
-                # Media top 3 attrazioni
+                # Average cost of the top 3 attractions
                 top_costs = sorted([a['cost_euro'] for a in attractions], reverse=True)[:3]
                 cost += sum(top_costs) / max(len(top_costs), 1)
         
         return round(cost, 2)
     
     def get_statistics(self) -> Dict:
-        """Statistiche del database"""
+        """Database statistics."""
         all_cities = self.get_all_cities()
         
         total_attractions = sum(len(c.get('attractions', [])) for c in all_cities)
@@ -328,11 +327,11 @@ class CityDatabase:
 
 
 # ============================================================================
-# FUNZIONI DI UTILITÀ
+# UTILITY FUNCTIONS
 # ============================================================================
 
 def print_city_info(city: Dict):
-    """Stampa info formattate di una città"""
+    """Print formatted info for a city."""
     print(f"\n{'='*60}")
     print(f"🏙️  {city['name']} ({city['region']})")
     print(f"{'='*60}")
@@ -354,24 +353,24 @@ def print_city_info(city: Dict):
 
 
 def demo_database_usage():
-    """Demo di utilizzo del database"""
+    """Database usage demo."""
     print("""
     ╔══════════════════════════════════════════════════════════╗
     ║          City Database Demo                             ║
     ╚══════════════════════════════════════════════════════════╝
     """)
     
-    # Carica database
+    # Load database
     db = CityDatabase()
     
-    # Statistiche
+    # Statistics
     print("\n📊 STATISTICHE DATABASE")
     print("─" * 60)
     stats = db.get_statistics()
     for key, value in stats.items():
         print(f"  {key}: {value}")
     
-    # Test 1: Cerca per categoria
+    # Test 1: Search by category
     print("\n\n1️⃣  CERCA CITTÀ PER CATEGORIA: 'arte'")
     print("─" * 60)
     art_cities = db.search_by_category('arte')
@@ -379,7 +378,7 @@ def demo_database_usage():
     for city in art_cities[:3]:
         print(f"  • {city['name']} - {', '.join(city['categories'][:3])}")
     
-    # Test 2: Città vicine
+    # Test 2: Nearby cities
     print("\n\n2️⃣  CITTÀ ENTRO 200 KM DA FIRENZE")
     print("─" * 60)
     florence = db.get_city('firenze')
@@ -391,7 +390,7 @@ def demo_database_usage():
     for entry in nearby[:5]:
         print(f"  • {entry['city']['name']}: {entry['distance_km']} km")
     
-    # Test 3: Calcola score
+    # Test 3: Compute score
     print("\n\n3️⃣  SCORE CITTÀ PER INTERESSI ['arte', 'storia']")
     print("─" * 60)
     interests = ['arte', 'storia']
@@ -404,11 +403,11 @@ def demo_database_usage():
     for name, score in scored_cities[:5]:
         print(f"  • {name}: {score:.2f}/1.00")
     
-    # Test 4: Info dettagliate
+    # Test 4: Detailed info
     print("\n\n4️⃣  INFO DETTAGLIATE: ROMA")
     print_city_info(db.get_city('roma'))
     
-    # Test 5: Costi
+    # Test 5: Costs
     print("\n\n5️⃣  STIMA COSTI GIORNALIERI")
     print("─" * 60)
     for city in db.get_all_cities()[:5]:

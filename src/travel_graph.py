@@ -1,7 +1,7 @@
 """
 Travel Graph Builder
-Costruisce un grafo delle connessioni tra città usando API Trenitalia
-Calcola tempi e costi di viaggio tra le città
+Builds a graph of connections between cities using Trenitalia APIs.
+Computes travel time and cost between cities.
 """
 
 from datetime import datetime, timedelta
@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 import sys
 
-# Aggiungi src al path per import
+# Add `src` to sys.path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
 from apitr import apitr
@@ -18,23 +18,23 @@ from city_database import CityDatabase
 import time
 
 class TravelGraph:
-    """Grafo delle connessioni ferroviarie tra città"""
+    """Graph of rail connections between cities."""
     
     def __init__(self, cache_file: str = None):
         self.api = apitr(decodeJson=True)
         self.city_db = CityDatabase(use_osm=True)
         
         if cache_file is None:
-            # Default: cerca in cache/ relativo alla root del progetto
+            # Default: look under cache/ relative to the project root
             cache_file = Path(__file__).parent.parent / "cache" / "travel_graph_cache.json"
         self.cache_file = Path(cache_file)
         self.graph = {}
         
-        # Carica cache se esiste
+        # Load cache if present
         self.load_cache()
     
     def load_cache(self):
-        """Carica grafo da cache"""
+        """Load the graph from cache."""
         if self.cache_file.exists():
             with open(self.cache_file, 'r') as f:
                 self.graph = json.load(f)
@@ -43,34 +43,35 @@ class TravelGraph:
             print("ℹ️  Nessuna cache trovata, sarà creata al primo utilizzo")
     
     def save_cache(self):
-        """Salva grafo su cache"""
+        """Save the graph to cache."""
         with open(self.cache_file, 'w') as f:
             json.dump(self.graph, f, indent=2)
         print(f"💾 Cache salvata: {self.cache_file}")
     
     def estimate_travel_time(self, origin: str, destination: str) -> Optional[float]:
         """
-        Stima tempo di viaggio tra due città (in ore)
-        Usa cache se disponibile, altrimenti chiama API
+        Estimate travel time between two cities in hours.
+
+        Uses cache when available, otherwise computes a value.
         """
-        # Controlla cache
+        # Check cache
         if origin in self.graph:
             if destination in self.graph[origin]:
                 cached = self.graph[origin][destination]
                 return cached.get('avg_time_hours')
         
-        # Altrimenti calcola (simulato per ora - richiede API call)
+        # Otherwise compute it (currently simulated, requires a real API call to be accurate)
         return self._calculate_travel_time_api(origin, destination)
     
     def _calculate_travel_time_api(self, origin: str, destination: str) -> Optional[float]:
         """
-        Calcola tempo reale usando API Trenitalia
-        
-        Nota: Per 4 giorni, usa stime hardcoded o cache.
-        Per versione completa, interroga API per ogni coppia.
+        Compute travel time using Trenitalia APIs.
+
+        Note: for the current scope, this uses a geographic estimate or cache.
+        A full version would query the API for each city pair.
         """
-        # TODO: Implementare chiamata API reale
-        # Per ora usa distanza geografica come proxy
+        # TODO: Implement the real API call.
+        # For now, use geographic distance as a proxy.
         
         origin_city = self.city_db.get_city_by_name(origin)
         dest_city = self.city_db.get_city_by_name(destination)
@@ -78,7 +79,7 @@ class TravelGraph:
         if not origin_city or not dest_city:
             return None
         
-        # Calcola distanza in linea d'aria
+        # Compute straight line distance
         from math import radians, cos, sin, asin, sqrt
         
         coords = origin_city.get("coordinates")
@@ -101,17 +102,17 @@ class TravelGraph:
         c = 2 * asin(sqrt(a))
         distance_km = 6371 * c
         
-        # Stima tempo: velocità media treni ~100 km/h + buffer
+        # Estimate duration: average speed about 100 km/h plus buffer
         estimated_hours = (distance_km / 100) + 0.5
         
         return round(estimated_hours, 2)
     
     def build_complete_graph(self, force_rebuild: bool = False):
         """
-        Costruisce grafo completo con tutte le connessioni
-        
+        Build the complete graph with all connections.
+
         Args:
-            force_rebuild: Se True, ricalcola anche se esiste cache
+            force_rebuild: when True, recompute even if cache exists
         """
         if self.graph and not force_rebuild:
             print("✅ Grafo già presente in cache")
@@ -130,7 +131,7 @@ class TravelGraph:
                 
                 dest_name = dest_city['name']
                 
-                # Calcola tempo
+                # Compute travel time
                 travel_time = self.estimate_travel_time(origin_name, dest_name)
                 
                 if travel_time:
@@ -143,12 +144,12 @@ class TravelGraph:
             
             print(f"  ✓ {origin_name}: {len(self.graph[origin_name])} connessioni")
         
-        # Salva cache
+        # Save cache
         self.save_cache()
         print(f"✅ Grafo completo: {len(self.graph)} città")
     
     def _calculate_distance(self, city1: Dict, city2: Dict) -> float:
-        """Calcola distanza geografica tra due città"""
+        """Compute geographic distance between two cities."""
         from math import radians, cos, sin, asin, sqrt
         
         lat1 = city1['coordinates']['lat']
@@ -165,10 +166,10 @@ class TravelGraph:
     
     def get_reachable_cities(self, origin: str, max_hours: float = 4.0) -> List[Dict]:
         """
-        Trova città raggiungibili da origin entro max_hours
-        
+        Find cities reachable from `origin` within `max_hours`.
+
         Returns:
-            Lista di dict con {city, travel_time, distance}
+            List of dicts with city, travel_time, distance
         """
         if origin not in self.graph:
             print(f"⚠️  {origin} non trovata nel grafo")
@@ -185,16 +186,16 @@ class TravelGraph:
                     'distance_km': info['distance_km']
                 })
         
-        # Ordina per tempo di viaggio
+        # Sort by travel time
         reachable.sort(key=lambda x: x['travel_time_hours'])
         return reachable
     
     def find_shortest_path(self, origin: str, destination: str) -> Optional[List[str]]:
         """
-        Trova il percorso più breve tra due città (Dijkstra)
-        
+        Find the shortest path between two cities using Dijkstra.
+
         Returns:
-            Lista di città nel percorso, oppure None
+            List of cities in the path, or None
         """
         if origin not in self.graph or destination not in self.graph:
             return None
@@ -229,7 +230,7 @@ class TravelGraph:
                     previous[neighbor] = current
                     heapq.heappush(pq, (distance, neighbor))
         
-        # Ricostruisci percorso
+        # Reconstruct path
         if distances[destination] == float('inf'):
             return None
         
@@ -242,13 +243,13 @@ class TravelGraph:
         return list(reversed(path))
     
     def get_connection_details(self, origin: str, destination: str) -> Optional[Dict]:
-        """Ottieni dettagli connessione tra due città"""
+        """Get connection details between two cities."""
         if origin in self.graph and destination in self.graph[origin]:
             return self.graph[origin][destination]
         return None
     
     def visualize_connections(self, city: str):
-        """Stampa connessioni di una città"""
+        """Print all connections from a city."""
         if city not in self.graph:
             print(f"❌ {city} non trovata")
             return
@@ -268,7 +269,7 @@ class TravelGraph:
 
 
 def demo_travel_graph():
-    """Demo del grafo di viaggio"""
+    """Demo of the travel graph."""
     print("""
     ╔══════════════════════════════════════════════════════════╗
     ║          Travel Graph Demo                              ║
@@ -277,10 +278,10 @@ def demo_travel_graph():
     
     graph = TravelGraph()
     
-    # Costruisci grafo (usa cache se esiste)
+    # Build the graph (uses cache when present)
     graph.build_complete_graph()
     
-    # Test 1: Città raggiungibili
+    # Test 1: reachable cities
     print("\n\n1️⃣  CITTÀ RAGGIUNGIBILI DA MILANO (max 3 ore)")
     print("─"*60)
     reachable = graph.get_reachable_cities("Milano", max_hours=3.0)
@@ -289,7 +290,7 @@ def demo_travel_graph():
         mins = int((hours % 1) * 60)
         print(f"  • {entry['city']:15s}  {int(hours)}h {mins:02d}m  ({entry['distance_km']} km)")
     
-    # Test 2: Percorso più breve
+    # Test 2: shortest path
     print("\n\n2️⃣  PERCORSO PIÙ BREVE: Bologna → Napoli")
     print("─"*60)
     path = graph.find_shortest_path("Bologna", "Napoli")
@@ -304,11 +305,11 @@ def demo_travel_graph():
                 print(f"  {path[i]} → {path[i+1]}: {details['avg_time_hours']}h")
         print(f"\n  Total time: {total_time:.2f} ore")
     
-    # Test 3: Connessioni da una città
+    # Test 3: connections from a city
     print("\n\n3️⃣  TUTTE LE CONNESSIONI DA FIRENZE")
     graph.visualize_connections("Firenze")
     
-    # Test 4: Matrice distanze (prime 5 città)
+    # Test 4: distance matrix (first 5 cities)
     print("\n\n4️⃣  MATRICE TEMPI DI VIAGGIO (ore)")
     print("─"*60)
     cities = ["Milano", "Roma", "Firenze", "Venezia", "Napoli"]
@@ -319,7 +320,7 @@ def demo_travel_graph():
         print(f"{city[:8]:>10s}", end="")
     print()
     
-    # Righe
+    # Rows
     for origin in cities:
         print(f"{origin[:12]:12s}", end="")
         for dest in cities:

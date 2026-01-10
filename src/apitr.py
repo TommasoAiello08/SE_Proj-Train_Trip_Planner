@@ -4,15 +4,15 @@ from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 '''
-	API Trenitalia
+	Trenitalia API
 	Version: 0.1.0
-	Visual Laser 10 New - 10/2023
+	Visual Laser 10 New, 10/2023
 '''
 
 class apitr:
 	__decodeJson = True
 	def __init__(self, decodeJson:bool = True):
-		# decodeJson: True = return dict, False = return text/plain
+		# decodeJson: True returns dict, False returns text/plain
 		self.__decodeJson = decodeJson
 
 	__uris = {
@@ -77,7 +77,7 @@ class apitr:
 			},
 			timeout=12,
 		)
-		#set to use utf-8
+		# Decode as UTF 8
 		if (x.status_code == 200):
 			try:
 				if (self.__decodeJson):
@@ -131,7 +131,7 @@ class apitr:
 		return self.__request(self.__uris['StazioniByRegione'] + codRegione)
 
 	def getCodStazione(self, nomeStazione:str):
-		# return codStazione from nomeStazione
+		# Return codStazione from nomeStazione
 		stazioni = self.searchStazione(nomeStazione)
 		if (stazioni != None):
 			try:
@@ -141,9 +141,9 @@ class apitr:
 		else:
 			return None
 		
-	####### TOOLS METHODS #######
+	####### TOOL METHODS #######
 	def timestamp2datetime(self, timestamp):
-		# convert timestamp with || without millisec to datetime
+		# Convert timestamp with or without milliseconds to datetime
 		try:
 			return datetime.fromtimestamp(int(timestamp))
 		except:

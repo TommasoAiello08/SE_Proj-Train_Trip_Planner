@@ -3,27 +3,25 @@ Itinerary Planner - Multi-City Travel Planning System
 =================================================================
 
 Input:
-- Available days (es: 4)
-- Cities to visit in order (es: Milano → Bologna → Firenze → Roma)
-- User interests
-- Budget (optional)
+
+1) Available days (e.g. 4)
+2) Cities to visit in order (e.g. Milano → Bologna → Firenze → Roma)
+3) User interests
+4) Budget (optional)
 
 Output:
-- Day-by-day schedule with:
-  - Train times between cities
-  - POIs to visit each day
-  - Estimated times and costs
-  - Weather adaptation
 
-Algoritmo:
-1. Calculate travel times between consecutive cities
-2. Distribute days among cities (proporzionale a POI disponibili)
-3. For each day/city, select optimal POIs considering:
-   - Available time (ore diurne - viaggio - pasti)
-   - Meteo (indoor se pioggia, outdoor se sole)
-   - User interests (match con categorie)
-   - Distances between POIs (clustering geografico)
-4. Optimize POI visit order in day (TSP locale)
+Day-by-day schedule including:
+1) Train times between cities
+2) POIs to visit each day
+3) Estimated times and costs
+4) Weather adaptation
+
+Algorithm:
+1) Calculate travel times between consecutive cities
+2) Distribute days among cities proportionally to available POIs
+3) For each day and city, select POIs considering available time (daylight hours minus travel and meals), weather (indoor when rainy, outdoor when clear), user interests (category match), and distances between POIs (geographic clustering)
+4) Optimize POI visit order within a day (local TSP)
 """
 
 import json
@@ -59,24 +57,24 @@ class TripInput:
 
 @dataclass
 class DaySchedule:
-    """Schedule di un singolo giorno"""
+    """Schedule for a single day."""
     day_number: int
     date: datetime
     city: str
     
-    # Viaggio
-    morning_train: Optional[Dict] = None  # Se c'è spostamento
-    travel_time: float = 0.0  # Ore di viaggio
+    # Travel
+    morning_train: Optional[Dict] = None  # Only if there is a transfer
+    travel_time: float = 0.0  # Travel hours
     
-    # Attività
-    pois: List[Dict] = None  # POI da visitare
-    activities: List[Dict] = None  # Schedule dettagliato con orari
+    # Activities
+    pois: List[Dict] = None  # POIs to visit
+    activities: List[Dict] = None  # Detailed schedule with times
     
-    # Costi e meteo
+    # Costs and weather
     estimated_cost: float = 0.0
     weather: Optional[Dict] = None
     
-    # Logistica
+    # Logistics
     accommodation: Optional[str] = None
     meals: List[str] = None
 
@@ -99,13 +97,13 @@ class ItineraryPlanner:
     
     def plan_trip(self, trip_input: TripInput) -> List[DaySchedule]:
         """
-        Metodo principale: crea itinerario completo
-        
+        Main method: create a full itinerary.
+
         Args:
-            trip_input: Parametri del viaggio
-            
+            trip_input: Trip parameters
+
         Returns:
-            Lista di DaySchedule (uno per giorno)
+            List of DaySchedule entries (one per day)
         """
         print(f"\n🗺️  PIANIFICAZIONE ITINERARIO: {' → '.join(trip_input.cities)}")
         print(f"📅 Days: {trip_input.days}")
@@ -122,7 +120,7 @@ class ItineraryPlanner:
             travel_times
         )
         
-        # Step 3: Crea schedule per ogni giorno
+        # Step 3: Create the schedule for each day
         schedule = []
         current_date = trip_input.start_date or datetime.now()
         day_counter = 1
@@ -144,14 +142,14 @@ class ItineraryPlanner:
                 current_date += timedelta(days=1)
                 day_counter += 1
         
-        # Step 4: Ottimizza e valida
+        # Step 4: Optimize and validate
         self._optimize_schedule(schedule)
         
         return schedule
     
     def _calculate_travel_times(self, cities: List[str]) -> Dict[tuple, float]:
         """
-        Calcola tempi di viaggio tra città consecutive
+        Compute travel times between consecutive cities.
         """
         print("\n🚂 Calculating travel times...")
         travel_times = {}
@@ -185,12 +183,12 @@ class ItineraryPlanner:
         travel_times: Dict[tuple, float]
     ) -> Dict[str, int]:
         """
-        Distribuisce giorni tra città in modo intelligente
-        
-        Strategia:
-        1. Calculate "weight" of each city (number of POIs * average rating)
-        2. Subtract travel days (se >6h dedica giorno intero)
-        3. Distribute remaining days proportionally to weights
+        Distribute days across cities using a simple weighting strategy.
+
+        Strategy:
+        1) Calculate a "weight" for each city (number of POIs times average rating)
+        2) Subtract travel days (if travel time is > 6h, dedicate a full day)
+        3) Distribute remaining days proportionally to weights
         """
         print("\n�� Distributing days among cities...")
         
@@ -221,7 +219,7 @@ class ItineraryPlanner:
         # Adjust for exact sum
         current_sum = sum(allocation.values())
         if current_sum != total_days:
-            # Aggiungi/rimuovi giorni dalla città con più peso
+            # Add or remove days from the city with the highest weight
             max_city = max(city_weights, key=city_weights.get)
             allocation[max_city] += (total_days - current_sum)
         

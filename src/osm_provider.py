@@ -1,9 +1,7 @@
-"""
-OSM Provider - Integrazione dinamica con OpenStreetMap
-=======================================================
+"""OSM Provider: dynamic integration with OpenStreetMap.
 
-Fornisce dati POI on-demand per qualsiasi città italiana.
-Include caching per evitare chiamate ripetute.
+Provides POI data on demand for any Italian city.
+Includes caching to avoid repeated requests.
 """
 
 import requests
@@ -16,7 +14,7 @@ from datetime import datetime, timedelta
 
 class OSMProvider:
     """
-    Provider per dati OpenStreetMap con caching intelligente
+    OpenStreetMap data provider with smart caching.
     """
     
     def __init__(self, cache_dir: Optional[Path] = None):
@@ -25,38 +23,38 @@ class OSMProvider:
         
         # Rate limiting
         self.last_request_time = 0
-        self.min_request_interval = 2.0  # 2 secondi tra richieste
+        self.min_request_interval = 2.0  # 2 seconds between requests
         
         # Cache
         self.cache_dir = cache_dir or (Path(__file__).parent.parent / "cache" / "osm")
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.cache_ttl = timedelta(days=7)  # Cache valida 7 giorni
+        self.cache_ttl = timedelta(days=7)  # Cache valid for 7 days
     
     def _rate_limit(self):
-        """Applica rate limiting"""
+        """Apply rate limiting."""
         elapsed = time.time() - self.last_request_time
         if elapsed < self.min_request_interval:
             time.sleep(self.min_request_interval - elapsed)
         self.last_request_time = time.time()
     
     def _get_cache_path(self, city_name: str) -> Path:
-        """Ottiene path del file cache per una città"""
+        """Return the cache file path for a city."""
         safe_name = city_name.replace(" ", "_").lower()
         return self.cache_dir / f"{safe_name}.json"
     
     def _is_cache_valid(self, cache_path: Path) -> bool:
-        """Verifica se cache è ancora valida"""
+        """Check whether the cache entry is still valid."""
         if not cache_path.exists():
             return False
         
-        # Controlla età del file
+        # Check file age
         mtime = datetime.fromtimestamp(cache_path.stat().st_mtime)
         age = datetime.now() - mtime
         
         return age < self.cache_ttl
     
     def _load_from_cache(self, city_name: str) -> Optional[Dict]:
-        """Carica dati da cache se disponibile"""
+        """Load cached data when available."""
         cache_path = self._get_cache_path(city_name)
         
         if self._is_cache_valid(cache_path):
@@ -69,7 +67,7 @@ class OSMProvider:
         return None
     
     def _save_to_cache(self, city_name: str, data: Dict):
-        """Salva dati in cache"""
+        """Save data to cache."""
         cache_path = self._get_cache_path(city_name)
         try:
             with open(cache_path, 'w', encoding='utf-8') as f:
@@ -79,10 +77,10 @@ class OSMProvider:
     
     def get_city_coordinates(self, city_name: str) -> Optional[Dict]:
         """
-        Ottiene coordinate di una città italiana
-        
+        Get coordinates for an Italian city.
+		
         Returns:
-            {'lat': float, 'lon': float, 'display_name': str} o None
+            {'lat': float, 'lon': float, 'display_name': str} or None
         """
         self._rate_limit()
         
@@ -118,16 +116,16 @@ class OSMProvider:
     
     def get_city_pois(self, city_name: str, radius: int = 15000) -> List[Dict]:
         """
-        Ottiene POI per una città con caching
-        
+        Get POIs for a city, with caching.
+		
         Args:
-            city_name: Nome città
-            radius: Raggio ricerca in metri (default 15km)
-            
+            city_name: City name
+            radius: Search radius in meters (default 15 km)
+			
         Returns:
-            Lista POI con name, type, rating, duration, cost, categories, lat, lon
+            List of POIs with name, type, rating, duration, cost, categories, lat, lon
         """
-        # Controlla cache
+        # Check cache
         cached_data = self._load_from_cache(city_name)
         if cached_data:
             print(f"  💾 Cache hit per {city_name}")
@@ -135,7 +133,7 @@ class OSMProvider:
         
         print(f"  🌐 Interrogo OSM per {city_name}...")
         
-        # Ottieni coordinate centro città
+        # Get city center coordinates
         coords = self.get_city_coordinates(city_name)
         if not coords:
             print(f"  ❌ Coordinate non trovate per {city_name}")
@@ -143,16 +141,16 @@ class OSMProvider:
         
         lat, lon = coords['lat'], coords['lon']
         
-        # Estrai POI (con retry per rate limiting)
+        # Fetch POIs with retries for rate limiting
         pois = self._fetch_pois_with_retry(lat, lon, radius)
         
-        # Converte POI OSM in formato nostro database
+        # Convert OSM POIs to the local database format
         formatted_pois = self._format_pois(pois)
         
         # Curate to max 20 POIs with diversity
         curated_pois = self._select_diverse_pois(formatted_pois, max_pois=20, min_per_category=2)
         
-        # Salva in cache
+        # Save to cache
         cache_data = {
             'city': city_name,
             'coordinates': coords,
@@ -168,9 +166,9 @@ class OSMProvider:
     
     def _fetch_pois_with_retry(self, lat: float, lon: float, radius: int, max_retries: int = 3) -> List[Dict]:
         """
-        Estrae POI da OSM con gestione errori e retry
+        Fetch POIs from OSM with error handling and retries.
         """
-        # Query più semplice per evitare timeout
+        # Simpler query to reduce timeouts
         query = f"""
         [out:json][timeout:45];
         (
@@ -192,7 +190,7 @@ class OSMProvider:
                 )
                 
                 if response.status_code == 429:
-                    # Too many requests - attendi più a lungo
+                    # Too many requests, wait longer
                     wait_time = (attempt + 1) * 5
                     print(f"    ⏳ Rate limit, attendo {wait_time}s...")
                     time.sleep(wait_time)
@@ -218,7 +216,7 @@ class OSMProvider:
     
     def _format_pois(self, osm_pois: List[Dict]) -> List[Dict]:
         """
-        Converte POI OSM nel formato del nostro database
+        Convert OSM POIs to the local database format.
         """
         formatted = []
         
@@ -229,7 +227,7 @@ class OSMProvider:
             if not name or name == "Unnamed":
                 continue
             
-            # Determina tipo principale
+            # Determine the primary type
             poi_type = None
             categories = []
             
@@ -243,7 +241,7 @@ class OSMProvider:
                 poi_type = tags["leisure"]
                 categories.append(self._map_osm_category(tags["leisure"]))
             
-            # Estrai rating da wikidata se disponibile (altrimenti stima)
+            # Estimate rating using available tags
             rating = self._estimate_rating(tags)
             
             formatted_poi = {
@@ -254,7 +252,7 @@ class OSMProvider:
                 "categories": categories,
                 "lat": poi.get("lat"),
                 "lon": poi.get("lon"),
-                "popularity": rating,  # Uso rating come proxy
+                "popularity": rating,  # Use rating as a proxy
                 "osm_id": poi.get("id"),
                 "osm_type": poi_type
             }
@@ -264,7 +262,7 @@ class OSMProvider:
         return formatted
     
     def _map_osm_category(self, osm_tag: str) -> str:
-        """Mappa tag OSM alle nostre categorie"""
+        """Map OSM tags to local categories."""
         mapping = {
             "museum": "arte",
             "gallery": "arte",
@@ -281,20 +279,20 @@ class OSMProvider:
         return mapping.get(osm_tag, "cultura")
     
     def _estimate_rating(self, tags: Dict) -> float:
-        """Stima rating basato su dati disponibili"""
-        # Se ha wikipedia/wikidata, probabilmente importante
+        """Estimate a rating based on available tag data."""
+        # Wikipedia or Wikidata usually indicates relevance
         if tags.get("wikipedia") or tags.get("wikidata"):
             return 8.0
         
-        # Se è heritage UNESCO
+        # UNESCO heritage tag
         if tags.get("heritage"):
             return 9.0
         
-        # Default medio
+        # Default
         return 7.0
     
     def _estimate_duration(self, poi_type: str) -> float:
-        """Stima durata visita basata su tipo"""
+        """Estimate visit duration based on POI type."""
         durations = {
             "museum": 2.5,
             "gallery": 2.0,
@@ -306,7 +304,7 @@ class OSMProvider:
         return durations.get(poi_type, 1.5)
     
     def _estimate_cost(self, poi_type: str) -> float:
-        """Stima costo basato su tipo"""
+        """Estimate cost based on POI type."""
         costs = {
             "museum": 12.0,
             "gallery": 10.0,
@@ -318,13 +316,13 @@ class OSMProvider:
         return costs.get(poi_type, 8.0)    
     def _select_diverse_pois(self, pois: List[Dict], max_pois: int = 20, min_per_category: int = 2) -> List[Dict]:
         """
-        Seleziona POI diversificati con bilanciamento categorie e rating
-        
-        Strategy:
-        - Limit to max_pois (default 20)
-        - Ensure min_per_category per each target category (natura, cultura, arte, cibo, mare, montagna, storia, sport)
-        - Balance ratings: not all 10s, mix of 10s, 9s, 8s, 7s
-        - Prefer higher rated but ensure variety
+        Select diverse POIs while balancing categories and ratings.
+
+        Strategy
+        1) Limit to max_pois (default 20)
+        2) Ensure min_per_category for each target category (natura, cultura, arte, cibo, mare, montagna, storia, sport)
+        3) Balance ratings to avoid selecting only the highest scores
+        4) Prefer higher rated items while keeping variety
         """
         if len(pois) <= max_pois:
             return pois
@@ -400,11 +398,11 @@ class OSMProvider:
         return selected[:max_pois]    
     def get_train_station(self, city_name: str) -> Optional[Dict]:
         """
-        Trova stazione ferroviaria principale della città
+        Find the city's main train station.
         """
         self._rate_limit()
         
-        # Cerca varianti nome stazione
+        # Try common station name variants
         queries = [
             f"{city_name} Centrale",
             f"{city_name} Termini",
@@ -430,7 +428,7 @@ class OSMProvider:
                 response.raise_for_status()
                 results = response.json()
                 
-                # Filtra per tipo railway/stazione
+                # Filter for railway/station-like results
                 for result in results:
                     display = result["display_name"].lower()
                     result_type = result.get("type", "").lower()
@@ -445,7 +443,7 @@ class OSMProvider:
             except Exception:
                 continue
             
-            time.sleep(0.5)  # Breve pausa tra query
+            time.sleep(0.5)  # Short pause between queries
         
         return None
 
@@ -456,7 +454,7 @@ if __name__ == "__main__":
     
     print("🧪 Test OSM Provider\n")
     
-    # Test su città non nel database statico
+    # Test cities not present in the static database
     test_cities = ["Perugia", "Padova", "Siena"]
     
     for city in test_cities:
@@ -477,7 +475,7 @@ if __name__ == "__main__":
             for poi in pois[:5]:
                 print(f"  • {poi['name']} (rating: {poi['rating']}, {poi['duration_hours']}h, €{poi['cost']})")
         
-        # Stazione
+        # Station
         station = provider.get_train_station(city)
         if station:
             print(f"\n🚂 Stazione: {station['name']}")

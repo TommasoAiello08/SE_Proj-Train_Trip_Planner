@@ -1,8 +1,8 @@
 """
-Train Pathfinding - Algoritmo di ricerca percorsi ferroviari reali
+Train Pathfinding - Real train route search
 ===================================================================
 
-Usa endpoint partenze/arrivi per costruire percorsi con cambi usando BFS.
+Uses departures/arrivals endpoints to build routes with transfers using BFS.
 """
 
 from datetime import datetime, timedelta
@@ -13,18 +13,18 @@ import time
 
 class TrainPathfinder:
     """
-    Trova percorsi ferroviari ottimali usando dati reali API Trenitalia
+    Find optimal rail routes using real data from the Trenitalia API.
     """
     
     def __init__(self, api_treni, city_db):
         self.api = api_treni
         self.city_db = city_db
         
-        # Limiti ricerca
-        self.MAX_CHANGES = 2  # Massimo 2 cambi
-        self.MAX_WAIT_HOURS = 3  # Massimo 3 ore di attesa per cambio
-        self.MIN_TRANSFER_MINUTES = 10  # Minimo 10 minuti per cambio
-        self.SEARCH_TIMEOUT_SECONDS = 15  # Timeout ricerca
+        # Search limits
+        self.MAX_CHANGES = 2  # Max 2 transfers
+        self.MAX_WAIT_HOURS = 3  # Max 3 hours waiting for a transfer
+        self.MIN_TRANSFER_MINUTES = 10  # Minimum transfer time in minutes
+        self.SEARCH_TIMEOUT_SECONDS = 15  # Search timeout
         
         # Cache
         self.station_cache = {}  # city_name -> station_code
@@ -36,45 +36,44 @@ class TrainPathfinder:
         departure_time: datetime
     ) -> Optional[Dict]:
         """
-        Trova il percorso ferroviario migliore da origine a destinazione
-        
-        Strategia:
-        1. Ottieni stazione di origine e destinazione
-        2. BFS sui treni in partenza
-        3. Per ogni treno, controlla se va a destinazione o a stazioni intermedie utili
-        4. Costruisci percorso con cambi se necessario
-        
-        WORKAROUND DATE: L'API Trenitalia restituisce dati solo per oggi.
-        Se la data è futura, usa l'anno precedente (stesso giorno/mese).
-        Gli orari ferroviari cambiano poco anno dopo anno.
+        Find the best rail route from origin to destination.
+
+        Strategy:
+        1) Get the origin and destination station codes
+        2) Run a BFS over departing trains
+        3) For each train, check whether it reaches the destination or useful intermediate stations
+        4) Build a multi-segment route with transfers when needed
+
+        Date workaround: the Trenitalia API effectively returns data only for today.
+        For dates far in the future or past, this method queries "today" to obtain a typical schedule.
         
         Returns:
             {
-                'train': dettagli percorso completo,
-                'travel_time': ore totali (viaggio + attese),
-                'departure': orario partenza,
-                'arrival': orario arrivo,
-                'price': prezzo stimato,
-                'changes': numero cambi,
-                'segments': lista segmenti del percorso
+                'train': full route details,
+                'travel_time': total hours (travel + waiting),
+                'departure': departure time,
+                'arrival': arrival time,
+                'price': estimated price,
+                'changes': number of transfers,
+                'segments': list of route segments
             }
         """
         start_time = time.time()
         
-        # 1. Ottieni codici stazione
+        # 1) Get station codes
         origin_station = self._get_station_code(origin_city)
         dest_station = self._get_station_code(dest_city)
         
         if not origin_station or not dest_station:
             return None
         
-        # WORKAROUND: API funziona solo per oggi ± 1-2 giorni
-        # Per date future/passate, usa OGGI per ottenere orari tipici
+        # Workaround: the API only works for today ± 1-2 days.
+        # For dates far from today, use today's date to obtain typical schedules.
         today = datetime.now().date()
         query_date = departure_time
         
         if abs((departure_time.date() - today).days) > 1:
-            # Data troppo lontana -> usa oggi con stesso orario
+            # Date too far away -> use today with the same time
             query_date = departure_time.replace(
                 year=today.year,
                 month=today.month,
@@ -84,7 +83,7 @@ class TrainPathfinder:
         
         print(f"    🔍 Ricerca percorso {origin_city} -> {dest_city}")
         
-        # 2. BFS per trovare percorso ottimale
+        # 2) BFS to find an optimal route
         best_route = self._bfs_search(
             origin_station,
             dest_station,
@@ -96,18 +95,18 @@ class TrainPathfinder:
             print(f"    ❌ Nessun percorso trovato")
             return None
         
-        # 3. Formatta risultato
+        # 3) Format result
         return self._format_route(best_route, origin_city, dest_city)
     
     def _get_station_code(self, city_name: str) -> Optional[str]:
-        """Ottiene codice stazione principale per una città (con cache)"""
+        """Get the main station code for a city (with cache)."""
         if city_name in self.station_cache:
             return self.station_cache[city_name]
         
-        # Mappa città -> nome stazione principale (hardcoded per affidabilità)
-        # Include le 106 città italiane più comuni
+        # City -> main station name mapping (hardcoded for reliability).
+        # Includes the most common Italian cities.
         station_names = {
-            # Grandi città
+            # Major cities
             "Milano": "MILANO CENTRALE",
             "Roma": "ROMA TERMINI",
             "Torino": "TORINO PORTA NUOVA",
@@ -133,7 +132,7 @@ class TrainPathfinder:
             "Salerno": "SALERNO",
             "Perugia": "PERUGIA",
             
-            # Toscana
+            # Tuscany
             "Pisa": "PISA CENTRALE",
             "Livorno": "LIVORNO CENTRALE",
             "Lucca": "LUCCA",
@@ -258,21 +257,21 @@ class TrainPathfinder:
             "Matera": "MATERA CENTRALE"
         }
         
-        # Usa nome dalla mappa se disponibile
+        # Use mapped name if available
         search_name = station_names.get(city_name, city_name.upper())
         
         try:
-            # Prova prima getCodStazione (più veloce)
+            # Try getCodStazione first (faster)
             code = self.api.getCodStazione(search_name)
             if code:
                 self.station_cache[city_name] = code
                 print(f"    📍 {city_name} -> {search_name} ({code})")
                 return code
             
-            # Fallback: usa searchStazione e prendi prima stazione principale
+            # Fallback: use searchStazione and take the first (usually main) station
             results = self.api.searchStazione(city_name.upper())
             if results and len(results) > 0:
-                # Prendi prima stazione (di solito è quella principale)
+                # Take the first station (usually the main one)
                 first_station = results[0]
                 code = first_station.get('id')
                 name = first_station.get('nomeLungo', city_name)
@@ -293,12 +292,12 @@ class TrainPathfinder:
         search_start: float
     ) -> Optional[List[Dict]]:
         """
-        BFS semplificato: cerca treni diretti dalla stazione di origine
+        Simplified BFS: search for direct trains from the origin station.
         """
         print(f"    🔍 Cerco treni diretti...")
         
         try:
-            # Ottieni tutti i treni in partenza
+            # Get all departing trains
             departures = self.api.getPartenze(origin_station, start_time)
             
             if not departures:
@@ -325,13 +324,13 @@ class TrainPathfinder:
                 
                 dep_time = datetime.fromtimestamp(int(dep_timestamp) / 1000)
                 
-                # Skip se partenza troppo lontana
+                # Skip if the departure is too far away
                 wait_hours = (dep_time - start_time).total_seconds() / 3600
                 if wait_hours > self.MAX_WAIT_HOURS:
                     continue
                 
                 try:
-                    # Ottieni andamento treno
+                    # Get train status
                     andamento = self.api.getAndamento(train_origin, str(train_number), dep_time)
                     
                     if not andamento:
@@ -339,12 +338,12 @@ class TrainPathfinder:
                     
                     fermate = andamento.get('fermate', [])
                     
-                    # Cerca destinazione tra le fermate
+                    # Look for the destination among stops
                     for fermata in fermate:
                         station_code = fermata.get('id')
                         
                         if station_code == dest_station:
-                            # Trovata!
+                            # Found
                             arr_timestamp = fermata.get('arrivo_teorico')
                             if not arr_timestamp:
                                 continue
@@ -352,7 +351,7 @@ class TrainPathfinder:
                             arr_time = datetime.fromtimestamp(int(arr_timestamp) / 1000)
                             total_duration = (arr_time - dep_time).total_seconds() / 3600
                             
-                            # Skip se durata negativa o impossibile
+                            # Skip if duration is negative or unreasonable
                             if total_duration < 0 or total_duration > 24:
                                 continue
                             
@@ -371,10 +370,10 @@ class TrainPathfinder:
                                 best_duration = total_duration
                                 print(f"    ✅ Treno {train_number} ({segment['category']}): {total_duration:.1f}h")
                             
-                            break  # Trovato per questo treno
+                            break  # Found for this train
                 
                 except Exception as e:
-                    # Errore su questo treno, continua
+                    # Error on this train, continue
                     continue
             
             return best_solution
@@ -391,13 +390,13 @@ class TrainPathfinder:
         search_start: float
     ) -> Optional[List[Dict]]:
         """
-        BFS per trovare percorso ferroviario ottimale (con cambi - DISABLED)
+        BFS to find an optimal rail route with transfers (DISABLED).
         
         State: (station_code, arrival_time, path)
         """
         # Queue: (station, current_time, path_segments, num_changes)
         queue = deque([(origin_station, start_time, [], 0)])
-        visited = set()  # (station, hour) per evitare loop
+        visited = set()  # (station, hour) to avoid loops
         
         best_solution = None
         best_duration = float('inf')
@@ -410,13 +409,13 @@ class TrainPathfinder:
             
             current_station, current_time, path, num_changes = queue.popleft()
             
-            # Skip se già visitato in questo orario
+            # Skip if already visited at this hour
             visit_key = (current_station, current_time.hour)
             if visit_key in visited:
                 continue
             visited.add(visit_key)
             
-            # Se troppe connessioni, fermati
+            # Stop if there are too many connections
             if num_changes > self.MAX_CHANGES:
                 continue
         
@@ -428,25 +427,25 @@ class TrainPathfinder:
         origin_city: str,
         dest_city: str
     ) -> Dict:
-        """Formatta percorso trovato nel formato atteso"""
+        """Format a found route into the expected output format."""
         if not segments:
             return None
         
         first_seg = segments[0]
         last_seg = segments[-1]
         
-        # Calcola durata totale
+        # Compute total duration
         total_duration = (last_seg['arrival'] - first_seg['departure']).total_seconds() / 3600
         
-        # Stima prezzo (circa 0.15€/km per treni regionali, 0.25€/km per IC/FR)
+        # Estimate price (roughly 0.15€/km for regional trains, 0.25€/km for IC/FR)
         total_price = 0
         for seg in segments:
             if 'FR' in seg['category'] or 'AV' in seg['category']:
-                total_price += 50  # Alta velocità
+                total_price += 50  # High-speed
             elif 'IC' in seg['category']:
                 total_price += 30  # Intercity
             else:
-                total_price += 15  # Regionale
+                total_price += 15  # Regional
         
         return {
             'train': {
