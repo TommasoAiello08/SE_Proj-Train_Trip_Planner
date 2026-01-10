@@ -68,7 +68,7 @@ def estimate_time():
         return jsonify({
             'estimated_seconds': estimate['total_estimated'],
             'estimated_minutes': estimate['total_estimated'] / 60,
-            'num_api_calls': estimate['num_api_calls'],
+            'num_api_calls': estimate.get('num_api_calls', None),
             'breakdown': {
                 'candidate_selection': estimate['candidate_selection'],
                 'train_matrix': estimate['train_matrix'],
