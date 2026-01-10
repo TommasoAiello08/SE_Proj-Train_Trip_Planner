@@ -26,15 +26,12 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Tuple
 import sys
-import random
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
 from city_database import CityDatabase
 from apitr import apitr
-from train_pathfinder import TrainPathfinder
-import heapq
 
 
 @dataclass
@@ -77,7 +74,6 @@ class DPItineraryPlanner:
     def __init__(self):
         self.city_db = CityDatabase(use_osm=True)
         self.api_treni = apitr(decodeJson=True)
-        self.train_pathfinder = TrainPathfinder(self.api_treni, self.city_db)
         
         # Parametri configurabili  
         self.HOURS_PER_DAY = 13  # Ore disponibili per giorno (8:00-21:00)
@@ -89,7 +85,11 @@ class DPItineraryPlanner:
         self.TRAIN_BUFFER_HOURS = 1.0  # Buffer per accesso stazione
         
         # Cache
-        self.train_cache = {}  # (origin_code, dest_code, date) -> train_info
+        self.train_cache = {}  # (origin_city, dest_city, yyyy-mm-dd hh:mm) -> train_info
+
+        # ViaggiaTreno caches to reduce request volume (avoids throttling during matrix build)
+        self._vt_station_cache: Dict[str, Optional[Dict]] = {}
+        self._vt_departures_cache: Dict[Tuple[str, str], Optional[List[Dict]]] = {}
     
     def _calculate_distance(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
         """
@@ -109,7 +109,7 @@ class DPItineraryPlanner:
     
     def estimate_computation_time(self, trip_input: TripInput) -> Dict[str, float]:
         """
-        Stima tempo di computazione aggiornata per sistema ibrido ottimizzato
+        Stima tempo di computazione per mostrare progress bar
         
         Returns:
             {
@@ -117,48 +117,38 @@ class DPItineraryPlanner:
                 'train_matrix': secondi,
                 'dp_optimization': secondi,
                 'detail_generation': secondi,
-                'train_enrichment': secondi,
                 'total_estimated': secondi
             }
         """
         num_days = trip_input.days
-        
-        # Step 1: Candidate selection (~0.3s - route-based scoring con Haversine)
-        t_candidates = 0.3
-        
-        # Step 2: Train matrix - ORA USA FALLBACK GEOMETRICO (veloce!)
-        # Prima: ~18 API calls/giorno = 9s/giorno
-        # Dopo ottimizzazione: solo calcoli Haversine ~0.01s per coppia
-        # Con 35 candidates × 12 neighbors × num_days = 420 × num_days coppie
-        t_train_matrix = num_days * 0.4  # Molto più veloce senza API
-        
-        # Step 3: DP optimization
-        # Complessità: O(days × candidates² × neighbors)
-        # Con 35 candidates, 12 neighbors: ~35² × 12 × days = 14,700 × days ops
-        # Ogni operazione: score calculation + comparison (~0.00003s)
-        t_dp = max(0.5, num_days * 0.25)
-        
-        # Step 4: Detail generation (Knapsack per POI selection)
-        # 20 POIs per città, greedy sort + selection
-        t_details = num_days * 0.15
-        
-        # Step 5: Train enrichment con API REALE (nuovo!)
-        # Solo per tratte effettivamente usate: ~(num_days-1) tratte
-        # Livello 1: ricerca diretta (~5-8s per tratta)
-        # Livello 2: ricerca alternative se necessario (~10-15s extra)
-        # Stima conservativa: 8s per tratta con 30% che richiedono alternative
-        num_train_segments = max(1, num_days - 1)
-        t_enrichment = num_train_segments * 6  # ~6s media per tratta
-        
-        total = t_candidates + t_train_matrix + t_dp + t_details + t_enrichment
-        
+
+        # Candidate selection: small and fairly stable.
+        t_candidates = 0.5
+
+        # Train matrix dominates wall-clock time.
+        # ViaggiaTreno strategy:
+        # - ~1 `partenze` call per origin/day
+        # - some `andamentoTreno` calls for promising departures
+        departure_calls = min(self.MAX_CANDIDATES * num_days, 80)
+        total_pairs = self.MAX_CANDIDATES * self.MAX_CONNECTIONS_PER_CITY * num_days
+        andamento_calls = min(int(total_pairs * 0.25), 180)
+        num_api_calls = int(departure_calls + andamento_calls)
+
+        t_train_matrix = (departure_calls * 0.35) + (andamento_calls * 0.35) + 8.0
+
+        # DP + schedule generation
+        t_dp = max(0.7, num_days * 0.25)
+        t_details = num_days * 0.2
+
+        total = t_candidates + t_train_matrix + t_dp + t_details
+
         return {
             'candidate_selection': t_candidates,
             'train_matrix': t_train_matrix,
             'dp_optimization': t_dp,
             'detail_generation': t_details,
-            'train_enrichment': t_enrichment,
-            'total_estimated': total
+            'total_estimated': total,
+            'num_api_calls': num_api_calls,
         }
     
     def plan_trip(self, trip_input: TripInput) -> List[DaySchedule]:
@@ -182,6 +172,8 @@ class DPItineraryPlanner:
         print(f"⏱️  Tempo stimato: {time_estimate['total_estimated']:.1f}s")
         print("="*70)
         
+        start_date = trip_input.start_date or datetime.now()
+
         # Step 1: Candidate selection
         candidates = self._select_candidate_provinces(
             trip_input.start_city,
@@ -192,7 +184,7 @@ class DPItineraryPlanner:
         # Step 2: Train matrix (API calls)
         train_matrix = self._build_train_matrix(
             candidates,
-            trip_input.start_date,
+            start_date,
             trip_input.days,
             trip_input.end_city  # Pass end city to ensure it's always reachable
         )
@@ -219,13 +211,9 @@ class DPItineraryPlanner:
             route,
             day_allocation,
             train_matrix,
-            trip_input.start_date,
+            start_date,
             trip_input.interests
         )
-        
-        # Step 6: Arricchisci con dati treni reali (solo per percorso finale!)
-        print("\n🔄 Step 6: Enriching Final Route with Real Train Data")
-        self._enrich_schedule_with_real_trains(schedule, trip_input.start_date)
         
         print(f"\n✅ Itinerario generato: {len(schedule)} giorni")
         return schedule
@@ -527,12 +515,17 @@ class DPItineraryPlanner:
         
         # Per ogni giorno
         for day in range(1, num_days + 1):
-            # For day 1: search trains from 9:00 (early morning)
-            # For day 2+: search trains from 13:00 (after lunch/activities)
-            search_hour = 9 if day == 1 else 13
+            # Prefer morning departures (09:00-11:00) for all days
+            search_hour = 9
             current_date = start_date + timedelta(days=day - 1)
             current_datetime = current_date.replace(hour=search_hour, minute=0, second=0)
             print(f"  📅 Giorno {day} ({current_datetime.strftime('%Y-%m-%d %H:%M')})")
+
+            # ViaggiaTreno station endpoints are live feeds but can provide departures for near-future dates.
+            # Query the itinerary day at 09:00 to prefer morning trains.
+            schedule_datetime = current_date.replace(hour=search_hour, minute=0, second=0, microsecond=0)
+            if schedule_datetime.hour < 8:
+                schedule_datetime = schedule_datetime.replace(hour=8, minute=0)
             
             # Per ogni città di origine
             for origin in candidates:
@@ -552,15 +545,8 @@ class DPItineraryPlanner:
                     if origin == dest:
                         continue
                     
-                    # OTTIMIZZAZIONE: Non usare API reale durante train matrix building
-                    # Usa solo fallback geometrico (veloce) per DP
-                    # L'API reale sarà usata solo per il percorso finale
-                    train_info = self._find_best_train(
-                        origin,
-                        dest,
-                        current_datetime,
-                        use_real_api=False  # Fallback veloce per DP
-                    )
+                    # Cerca treno migliore per questa coppia (API reale con fallback)
+                    train_info = self._find_best_train(origin, dest, schedule_datetime)
                     
                     if train_info:
                         train_matrix[day][origin][dest] = train_info
@@ -571,22 +557,17 @@ class DPItineraryPlanner:
         self,
         origin_city: str,
         dest_city: str,
-        date: datetime,
-        use_real_api: bool = False  # NEW: flag per controllare quando usare API reale
+        date: datetime
     ) -> Optional[Dict]:
         """
         Trova il miglior treno per coppia città + data
-        
-        Args:
-            use_real_api: Se True, usa pathfinder con API reale (LENTO)
-                         Se False, usa fallback geometrico (VELOCE)
-        
+
         Strategia:
-        - Durante train matrix building: usa fallback (veloce)
-        - Per percorso finale: usa API reale (accurato)
+        - Usa endpoint funzionanti ViaggiaTreno: `partenze` + `andamentoTreno`
+        - Se non disponibili, fallback geometrico
         """
-        # Controlla cache
-        cache_key = (origin_city, dest_city, date.strftime('%Y-%m-%d'))
+        # Controlla cache (include time-of-day to avoid reusing a morning train for afternoon searches)
+        cache_key = (origin_city, dest_city, date.strftime('%Y-%m-%d %H:%M'))
         if cache_key in self.train_cache:
             return self.train_cache[cache_key]
         
@@ -596,25 +577,334 @@ class DPItineraryPlanner:
         
         if not origin_data or not dest_data:
             return None
-        
-        # USA API REALE solo se richiesto esplicitamente
-        if use_real_api:
-            try:
-                train_info = self.train_pathfinder.find_train_route(
-                    origin_city,
-                    dest_city,
-                    date
-                )
-                
-                if train_info:
-                    self.train_cache[cache_key] = train_info
-                    return train_info
-            
-            except Exception as e:
-                print(f"    ⚠️ Pathfinder error {origin_city}->{dest_city}: {e}")
-        
-        # Fallback geometrico (sempre, a meno che API non abbia avuto successo)
-        return self._estimate_train_connection(origin_data, dest_data)
+
+        try:
+            train_info = self._find_best_train_from_departures(origin_city, dest_city, date)
+            if train_info:
+                self.train_cache[cache_key] = train_info
+                return train_info
+        except Exception as e:
+            print(f"    ⚠️  API error {origin_city}->{dest_city}: {e}")
+
+        # Fallback geometrico
+        est = self._estimate_train_connection(origin_data, dest_data)
+        self.train_cache[cache_key] = est
+        return est
+
+    def _find_best_train_from_departures(self, origin_city: str, dest_city: str, date: datetime) -> Optional[Dict]:
+        """Find a plausible direct train using ViaggiaTreno `partenze` + `andamentoTreno`.
+
+        Constraints:
+        - departure time must be >= 08:00
+        - ViaggiaTreno does not provide ticket prices; price is estimated
+        """
+        origin_station = self._pick_viaggiatreno_station(origin_city)
+        dest_station = self._pick_viaggiatreno_station(dest_city)
+        if not origin_station or not dest_station:
+            return None
+
+        origin_data = self.city_db.get_city_by_name(origin_city)
+        dest_data = self.city_db.get_city_by_name(dest_city)
+
+        # Enforce departure after 08:00
+        preferred_dt = date.replace(second=0, microsecond=0)
+        if preferred_dt.hour < 8:
+            preferred_dt = preferred_dt.replace(hour=8, minute=0)
+
+        # Build a list of query times: try preferred time first, then (if needed) fall back to near-now.
+        search_dts = [preferred_dt]
+        now = datetime.now().replace(second=0, microsecond=0)
+        if preferred_dt.date() == now.date() and preferred_dt < now:
+            # Round up to next 5 minutes
+            minute = (now.minute + 4) // 5 * 5
+            if minute >= 60:
+                now = now.replace(hour=min(now.hour + 1, 23), minute=0)
+            else:
+                now = now.replace(minute=minute)
+            if now.hour < 8:
+                now = now.replace(hour=8, minute=0)
+            if now != preferred_dt:
+                search_dts.append(now)
+
+        departures = None
+        search_dt = None
+        for candidate_dt in search_dts:
+            dep_cache_key = (str(origin_station['id']), candidate_dt.strftime('%Y-%m-%d %H:%M'))
+            if dep_cache_key in self._vt_departures_cache:
+                departures = self._vt_departures_cache[dep_cache_key]
+            else:
+                raw_departures = self.api_treni.getPartenze(origin_station['id'], candidate_dt)
+                departures = raw_departures if isinstance(raw_departures, list) else None
+                # Cache even None to avoid hammering when the endpoint is temporarily failing
+                self._vt_departures_cache[dep_cache_key] = departures
+
+            if departures and isinstance(departures, list):
+                search_dt = candidate_dt
+                break
+
+        if not departures or not isinstance(departures, list) or search_dt is None:
+            return None
+
+        dest_long = str(dest_station.get('nomeLungo') or '').strip().upper()
+        dest_short = str(dest_station.get('nomeBreve') or '').strip().upper()
+        dest_city_upper = str(dest_city or '').strip().upper()
+        dest_station_id = str(dest_station.get('id') or '').strip()
+
+        dest_matchers = [s for s in [dest_long, dest_short, dest_city_upper] if s]
+        if not dest_matchers:
+            return None
+
+        # Collect direct candidates to the requested destination
+        candidates = []
+        for item in departures:
+            if not isinstance(item, dict):
+                continue
+            item_dest = str(item.get('destinazione', '')).strip().upper()
+            item_dest_code = str(item.get('codDestinazione') or '').strip()
+
+            # Prefer exact station-code match when available, else use name heuristics.
+            if dest_station_id and item_dest_code and item_dest_code == dest_station_id:
+                pass
+            else:
+                if not item_dest:
+                    continue
+                if not any(
+                    item_dest == m or m == item_dest or (m in item_dest) or (item_dest in m)
+                    for m in dest_matchers
+                ):
+                    continue
+            numero_treno = item.get('numeroTreno')
+            dep_hhmm = item.get('orarioPartenza')
+            if not numero_treno or not dep_hhmm:
+                continue
+            candidates.append((str(numero_treno).strip(), str(dep_hhmm).strip(), item))
+
+        if not candidates:
+            return None
+
+        # Prefer departures between 09:00 and 11:00 when available.
+        preferred_start_min = 9 * 60
+        preferred_end_min = 11 * 60
+        target_min = 10 * 60  # aim for ~10:00
+
+        enriched = []
+        for numero_treno, dep_hhmm, raw in candidates:
+            dep_dt = self._combine_date_hhmm(search_dt, dep_hhmm)
+            dep_min = dep_dt.hour * 60 + dep_dt.minute
+            in_window = preferred_start_min <= dep_min < preferred_end_min
+            enriched.append((in_window, dep_min, numero_treno, dep_hhmm, raw, dep_dt))
+
+        # Keep deterministic order by departure time
+        preferred = sorted([c for c in enriched if c[0]], key=lambda x: x[1])
+        others = sorted([c for c in enriched if not c[0]], key=lambda x: x[1])
+
+        def probe(group):
+            best_info_local = None
+            best_score_local = None
+            # Limit remote calls
+            for in_window, dep_min, numero_treno, dep_hhmm, raw, dep_dt in group[:6]:
+                andamento = self.api_treni.getAndamento(origin_station['id'], numero_treno, dep_dt)
+                duration_h = None
+                dep_str = None
+                arr_str = None
+
+                if andamento and isinstance(andamento, dict):
+                    durata = andamento.get('compDurata')
+                    if durata:
+                        duration_h = self._parse_duration(str(durata))
+                    dep_str = andamento.get('compOrarioPartenza')
+                    arr_str = andamento.get('compOrarioArrivo')
+
+                # For future dates, `andamentoTreno` may be unavailable; estimate duration/arrival.
+                if duration_h is None:
+                    distance_km = self._haversine_km(origin_data, dest_data)
+                    train_class = self._classify_train(numero_treno, raw.get('categoriaDescrizione') or raw.get('categoria') or raw.get('tipoTreno'))
+                    if train_class == 'alta_velocita':
+                        base_speed = 180
+                        overhead = 0.8
+                    elif train_class == 'intercity':
+                        base_speed = 120
+                        overhead = 1.0
+                    elif train_class == 'diurni_internazionali':
+                        base_speed = 110
+                        overhead = 1.2
+                    else:
+                        base_speed = 85
+                        overhead = 0.9
+                    if distance_km > 0:
+                        duration_h = (distance_km / base_speed) + overhead
+                    else:
+                        duration_h = 4.0
+                    dep_str = dep_str or dep_dt.strftime('%H:%M')
+                    arr_dt = dep_dt + timedelta(minutes=int(duration_h * 60))
+                    arr_str = arr_str or arr_dt.strftime('%H:%M')
+
+                categoria = raw.get('categoriaDescrizione') or raw.get('categoria') or raw.get('tipoTreno')
+                train_label = f"{categoria} {numero_treno}".strip() if categoria else f"{numero_treno}"
+
+                price_est = self._estimate_ticket_price(origin_city, dest_city, numero_treno, categoria)
+                train_type = self._classify_train(numero_treno, categoria)
+
+                info = {
+                    'train': train_label,
+                    'train_number': str(numero_treno),
+                    'train_type': train_type,
+                    'travel_time': round(float(duration_h), 2),
+                    'departure': dep_str or dep_hhmm,
+                    'arrival': arr_str,
+                    'price': price_est,
+                    'price_estimated': True,
+                    'changes': 0,
+                    'numero_treno': str(numero_treno),
+                    'estimated': False,
+                    'real_data': True,
+                }
+
+                # In preferred window: choose closest to target time, then shortest duration.
+                # Outside window: choose shortest duration.
+                if in_window:
+                    score = (abs(dep_min - target_min), float(duration_h))
+                else:
+                    score = (float(duration_h),)
+
+                if best_score_local is None or score < best_score_local:
+                    best_score_local = score
+                    best_info_local = info
+
+            return best_info_local
+
+        best_info = probe(preferred) if preferred else None
+        if best_info:
+            return best_info
+        return probe(others)
+
+    def _estimate_ticket_price(
+        self,
+        origin_city: str,
+        dest_city: str,
+        numero_treno: Optional[str],
+        categoria: Optional[str] = None,
+    ) -> float:
+        """Estimate ticket price (1 adult) based on distance and train type."""
+        origin_data = self.city_db.get_city_by_name(origin_city)
+        dest_data = self.city_db.get_city_by_name(dest_city)
+        distance_km = self._haversine_km(origin_data, dest_data)
+        if distance_km <= 0:
+            return 25.0
+
+        train_class = self._classify_train(numero_treno, categoria)
+
+        # €/km rates + base fees (tuned to be plausible, not exact)
+        if train_class == 'regionale':
+            base, rate = 4.0, 0.06
+        elif train_class == 'intercity':
+            base, rate = 7.0, 0.09
+        elif train_class == 'diurni_internazionali':
+            base, rate = 8.0, 0.11
+        elif train_class == 'alta_velocita':
+            base, rate = 12.0, 0.17
+        else:
+            base, rate = 6.0, 0.08
+
+        price = base + (distance_km * rate)
+        price = max(base, price)
+        price = min(price, 250.0)
+        return round(price, 2)
+
+    def _classify_train(self, numero_treno: Optional[str], categoria: Optional[str] = None) -> str:
+        try:
+            if numero_treno is not None:
+                n = int(str(numero_treno).strip())
+                if 500 <= n <= 999:
+                    return 'intercity'
+                if 1 <= n <= 199:
+                    return 'diurni_internazionali'
+                if (8000 <= n <= 8999) or (9300 <= n <= 9999):
+                    return 'alta_velocita'
+                return 'regionale'
+        except Exception:
+            pass
+
+        cat = (categoria or '').upper()
+        if 'INTERCITY' in cat or cat.startswith('IC'):
+            return 'intercity'
+        if 'FRECCIAROSSA' in cat or 'FRECCIARGENTO' in cat or 'FRECCIABIANCA' in cat or cat.startswith('FR'):
+            return 'alta_velocita'
+        return 'regionale'
+
+    def _haversine_km(self, origin_data: Optional[Dict], dest_data: Optional[Dict]) -> float:
+        try:
+            if not origin_data or not dest_data:
+                return 0.0
+            o = origin_data.get('coordinates') or {}
+            d = dest_data.get('coordinates') or {}
+            lat1, lon1 = float(o.get('lat')), float(o.get('lon'))
+            lat2, lon2 = float(d.get('lat')), float(d.get('lon'))
+
+            from math import radians, cos, sin, asin, sqrt
+            lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+            dlat = lat2 - lat1
+            dlon = lon2 - lon1
+            a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
+            c = 2 * asin(sqrt(a))
+            return 6371.0 * c
+        except Exception:
+            return 0.0
+
+    def _combine_date_hhmm(self, base_dt: datetime, hhmm: str) -> datetime:
+        s = str(hhmm).strip()
+        # ViaggiaTreno sometimes returns epoch timestamps (ms) instead of 'HH:MM'
+        try:
+            if s.isdigit():
+                val = int(s)
+                if val > 10**11:  # likely epoch milliseconds
+                    return datetime.fromtimestamp(val / 1000.0)
+                if val > 10**9:  # likely epoch seconds
+                    return datetime.fromtimestamp(val)
+        except Exception:
+            pass
+
+        try:
+            parts = s.split(':')
+            hh = int(parts[0])
+            mm = int(parts[1])
+            return base_dt.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        except Exception:
+            return base_dt
+
+    def _pick_viaggiatreno_station(self, query: str) -> Optional[Dict]:
+        """Pick a likely main station for a city name using ViaggiaTreno station search."""
+        q_norm = (query or '').strip().lower()
+        if q_norm in self._vt_station_cache:
+            return self._vt_station_cache[q_norm]
+
+        results = self.api_treni.searchStazione(query)
+        if not results:
+            self._vt_station_cache[q_norm] = None
+            return None
+        if isinstance(results, dict):
+            self._vt_station_cache[q_norm] = results
+            return results
+        if not isinstance(results, list):
+            self._vt_station_cache[q_norm] = None
+            return None
+
+        # Prefer a "Centrale" station when available
+        for st in results:
+            name = str(st.get('nomeLungo', '')).lower()
+            if 'centrale' in name and (q_norm in name or q_norm == ''):
+                self._vt_station_cache[q_norm] = st
+                return st
+
+        # Otherwise prefer an exact nomeLungo match
+        for st in results:
+            if str(st.get('nomeLungo', '')).strip().lower() == q_norm:
+                self._vt_station_cache[q_norm] = st
+                return st
+
+        picked = results[0] if results else None
+        self._vt_station_cache[q_norm] = picked
+        return picked
     
     def _estimate_train_connection(
         self,
@@ -689,32 +979,23 @@ class DPItineraryPlanner:
             avg_speed = 85  # Much slower for very long routes
             estimated_hours = (distance_km / avg_speed) + 1.5
         
-        # Randomizza orario partenza tra 09:00 e 12:00 per variare i risultati
-        departure_hour = random.randint(9, 12)
-        departure_minute = random.randint(0, 59)
-        departure_time = f"{departure_hour:02d}:{departure_minute:02d}"
-        
-        # Calcola arrivo
-        arrival_hour = departure_hour + int(estimated_hours)
-        arrival_minute = departure_minute + int((estimated_hours % 1) * 60)
-        if arrival_minute >= 60:
-            arrival_hour += 1
-            arrival_minute -= 60
-        arrival_time = f"{arrival_hour:02d}:{arrival_minute:02d}"
-        
-        # Randomizza prezzo tra 0.10€/km e 0.15€/km per variare i risultati
-        price_per_km = random.uniform(0.10, 0.15)
-        estimated_price = max(10.0, distance_km * price_per_km)
-        
+        departure_time = '09:00'
+        arrival_time = f"{9 + int(estimated_hours):02d}:{int((estimated_hours % 1) * 60):02d}"
+        estimated_price = self._estimate_ticket_price(origin_name, dest_name, None, None)
+
         return {
             'train': None,
+            'train_number': 'STIMATO',
+            'train_type': 'estimated',
             'travel_time': round(estimated_hours, 2),
             'departure': departure_time,
             'arrival': arrival_time,
-            'price': round(estimated_price, 2),
+            'price': round(float(estimated_price), 2),
+            'price_estimated': True,
             'changes': 0,
             'numero_treno': 'STIMATO',
-            'estimated': True
+            'estimated': True,
+            'real_data': False
         }
     
     def _parse_duration(self, duration_str: str) -> float:
@@ -1482,8 +1763,7 @@ class DPItineraryPlanner:
                 real_train = self._find_best_train(
                     origin,
                     dest,
-                    current_datetime,
-                    use_real_api=True
+                    current_datetime
                 )
                 
                 if real_train and real_train.get('real_data'):
@@ -1614,8 +1894,7 @@ class DPItineraryPlanner:
                 seg1 = self._find_best_train(
                     origin,
                     via_city['name'],
-                    departure_time,
-                    use_real_api=True
+                    departure_time
                 )
                 
                 if not seg1 or not seg1.get('real_data'):
@@ -1636,8 +1915,7 @@ class DPItineraryPlanner:
                 seg2 = self._find_best_train(
                     via_city['name'],
                     dest,
-                    dep2_datetime,
-                    use_real_api=True
+                    dep2_datetime
                 )
                 
                 if not seg2 or not seg2.get('real_data'):
