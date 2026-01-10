@@ -108,7 +108,7 @@ class DPItineraryPlanner:
     
     def estimate_computation_time(self, trip_input: TripInput) -> Dict[str, float]:
         """
-        Stima tempo di computazione per mostrare progress bar
+        Stima tempo di computazione aggiornata per sistema ibrido ottimizzato
         
         Returns:
             {
@@ -116,47 +116,47 @@ class DPItineraryPlanner:
                 'train_matrix': secondi,
                 'dp_optimization': secondi,
                 'detail_generation': secondi,
+                'train_enrichment': secondi,
                 'total_estimated': secondi
             }
         """
         num_days = trip_input.days
         
-        # Candidate selection: ~0.3s (route-based scoring with 2 distance calcs per city)
+        # Step 1: Candidate selection (~0.3s - route-based scoring con Haversine)
         t_candidates = 0.3
         
-        # Train matrix: API calls più costose
-        # Con MAX_CANDIDATES=35 e MAX_CONNECTIONS_PER_CITY=8
-        # Potenziali chiamate: 35 * 8 * num_days = 280 * num_days
-        # Ma molte sono cached dopo primo run
+        # Step 2: Train matrix - ORA USA FALLBACK GEOMETRICO (veloce!)
+        # Prima: ~18 API calls/giorno = 9s/giorno
+        # Dopo ottimizzazione: solo calcoli Haversine ~0.01s per coppia
+        # Con 35 candidates × 12 neighbors × num_days = 420 × num_days coppie
+        t_train_matrix = num_days * 0.4  # Molto più veloce senza API
         
-        # Stima realistica basata su testing:
-        # - Primo run: ~15-20 API calls per giorno (cache misses)
-        # - Run successivi: ~3-5 API calls per giorno (alcune cache expiry)
-        # - Cache hits: resto delle 280 * num_days chiamate
+        # Step 3: DP optimization
+        # Complessità: O(days × candidates² × neighbors)
+        # Con 35 candidates, 12 neighbors: ~35² × 12 × days = 14,700 × days ops
+        # Ogni operazione: score calculation + comparison (~0.00003s)
+        t_dp = max(0.5, num_days * 0.25)
         
-        estimated_new_calls = min(18 * num_days, 40)  # Cap at 40 total
-        total_possible_calls = self.MAX_CANDIDATES * self.MAX_CONNECTIONS_PER_CITY * num_days
-        estimated_cached_calls = max(0, total_possible_calls - estimated_new_calls)
-        
-        # Tempo: 0.5s per API call nuova, 0.003s per cache hit
-        t_train_matrix = (estimated_new_calls * 0.5) + (estimated_cached_calls * 0.003)
-        
-        # DP: più lento ora che valuta anche "stay" option
-        # Complessità: O(days * candidates^2) per move + O(days * candidates) per stay
-        # Con 35 candidates e stay option: ~(35^2 + 35) * days = ~1260 * days operations
-        t_dp = max(0.5, num_days * 0.2)  # Scala con giorni (ridotto)
-        
-        # Detail generation: Knapsack con 20 POIs per città (più veloce che con 100+)
-        # Ma ora dobbiamo gestire multiple days per city
+        # Step 4: Detail generation (Knapsack per POI selection)
+        # 20 POIs per città, greedy sort + selection
         t_details = num_days * 0.15
         
-        total = t_candidates + t_train_matrix + t_dp + t_details
+        # Step 5: Train enrichment con API REALE (nuovo!)
+        # Solo per tratte effettivamente usate: ~(num_days-1) tratte
+        # Livello 1: ricerca diretta (~5-8s per tratta)
+        # Livello 2: ricerca alternative se necessario (~10-15s extra)
+        # Stima conservativa: 8s per tratta con 30% che richiedono alternative
+        num_train_segments = max(1, num_days - 1)
+        t_enrichment = num_train_segments * 6  # ~6s media per tratta
+        
+        total = t_candidates + t_train_matrix + t_dp + t_details + t_enrichment
         
         return {
             'candidate_selection': t_candidates,
             'train_matrix': t_train_matrix,
             'dp_optimization': t_dp,
             'detail_generation': t_details,
+            'train_enrichment': t_enrichment,
             'total_estimated': total
         }
     

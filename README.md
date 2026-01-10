@@ -37,25 +37,34 @@ SEProejct/
 │   └── map_planner.html        # Interactive web interface
 ├── src/
 │   ├── dp_itinerary_planner.py # Dynamic Programming route optimizer
+│   ├── train_pathfinder.py     # BFS algorithm for real train routes
 │   ├── city_database.py        # 106 cities with OSM on-demand loading
 │   ├── osm_provider.py         # OpenStreetMap POI curation
 │   ├── weather_provider.py     # Weather API (prepared, not actively used)
 │   └── apitr.py                # Trenitalia API wrapper
+├── tests/                      # Test suite (see tests/README.md)
+│   ├── test_integration.py     # End-to-end system test
+│   ├── test_lungo.py           # Long-distance routes test
+│   └── test_completo.py        # PathFinder multi-route test
 ├── cache/
 │   └── osm/                    # 106 city POI caches (20 curated each)
-└── data/
-    ├── cities_database.json    # 106 Italian provinces metadata
-    └── provinces_static.json   # Fallback static data
+├── data/
+│   ├── cities_database.json    # 106 Italian provinces metadata
+│   └── provinces_static.json   # Fallback static data
+├── docs/                       # Technical documentation
+└── scripts/                    # Utility scripts for data generation
 ```
 
 ### Algorithm Overview
 
-The system uses four main algorithmic stages:
+The system uses a hybrid 6-step algorithmic pipeline:
 
 1. **Route-Based Candidate Selection**: Filters 106 cities to ~25-35 candidates using detour penalty formula favoring cities along the direct path
-2. **Greedy Neighbor Selection**: Each city connects to 8 nearest neighbors (always including destination), reducing API calls from O(n²) to manageable levels
+2. **Fast Train Matrix Building**: Uses geometric fallback (distance/100 km/h) during planning phase for speed
 3. **Dynamic Programming Optimization**: Computes optimal city sequence by evaluating STAY (comfort bonus) vs MOVE (exploration bonus minus travel cost) transitions, with daily constraints ensuring realistic schedules
 4. **Greedy Knapsack POI Selection**: Selects 2-3 attractions per day based on interest matching and ratings, respecting running clock constraint (8:00-21:00)
+5. **Train Enrichment with Real API Data**: Queries Trenitalia API for EACH route segment with 3-level fallback (direct search → alternative routes → geometric estimate)
+6. **Coverage Reporting**: Tracks percentage of routes with real train data vs estimates
 
 **Key Parameters:**
 - MAX_DAYS_PER_CITY = 2 (forces diverse itineraries)
@@ -64,6 +73,11 @@ The system uses four main algorithmic stages:
 - Exploration bonus: +50 points
 - Stay bonus: +30 points
 - Travel penalty: -5 per hour
+
+**Performance:**
+- Planning phase: ~5-10 seconds (geometric estimates)
+- Train enrichment: ~6 seconds per route segment
+- Total: ~20-40 seconds for 2-5 day trips
 
 ## Installation and Setup
 
