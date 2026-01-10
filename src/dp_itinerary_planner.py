@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from city_database import CityDatabase
 from apitr import apitr
+from train_pathfinder import TrainPathfinder
 import heapq
 
 
@@ -75,6 +76,7 @@ class DPItineraryPlanner:
     def __init__(self):
         self.city_db = CityDatabase(use_osm=True)
         self.api_treni = apitr(decodeJson=True)
+        self.train_pathfinder = TrainPathfinder(self.api_treni, self.city_db)
         
         # Parametri configurabili  
         self.HOURS_PER_DAY = 13  # Ore disponibili per giorno (8:00-21:00)
@@ -203,6 +205,10 @@ class DPItineraryPlanner:
             trip_input.start_date,
             trip_input.interests
         )
+        
+        # Step 6: Arricchisci con dati treni reali (solo per percorso finale!)
+        print("\n🔄 Step 6: Enriching Final Route with Real Train Data")
+        self._enrich_schedule_with_real_trains(schedule, trip_input.start_date)
         
         print(f"\n✅ Itinerario generato: {len(schedule)} giorni")
         return schedule
@@ -529,11 +535,14 @@ class DPItineraryPlanner:
                     if origin == dest:
                         continue
                     
-                    # Cerca treno migliore per questa coppia
+                    # OTTIMIZZAZIONE: Non usare API reale durante train matrix building
+                    # Usa solo fallback geometrico (veloce) per DP
+                    # L'API reale sarà usata solo per il percorso finale
                     train_info = self._find_best_train(
                         origin,
                         dest,
-                        current_datetime
+                        current_datetime,
+                        use_real_api=False  # Fallback veloce per DP
                     )
                     
                     if train_info:
@@ -545,16 +554,19 @@ class DPItineraryPlanner:
         self,
         origin_city: str,
         dest_city: str,
-        date: datetime
+        date: datetime,
+        use_real_api: bool = False  # NEW: flag per controllare quando usare API reale
     ) -> Optional[Dict]:
         """
-        Trova il miglior treno per coppia città + data usando API Trenitalia
+        Trova il miglior treno per coppia città + data
+        
+        Args:
+            use_real_api: Se True, usa pathfinder con API reale (LENTO)
+                         Se False, usa fallback geometrico (VELOCE)
         
         Strategia:
-        1. Ottieni codici stazione per origine/destinazione
-        2. Chiama getIndicazioniViaggio per soluzioni
-        3. Seleziona treno con min durata (o min cambi)
-        4. Fallback: stima geometrica
+        - Durante train matrix building: usa fallback (veloce)
+        - Per percorso finale: usa API reale (accurato)
         """
         # Controlla cache
         cache_key = (origin_city, dest_city, date.strftime('%Y-%m-%d'))
@@ -568,43 +580,23 @@ class DPItineraryPlanner:
         if not origin_data or not dest_data:
             return None
         
-        origin_station_code = origin_data.get('station_code')
-        dest_station_code = dest_data.get('station_code')
-        
-        if not origin_station_code or not dest_station_code:
-            # Fallback: stima geometrica
-            return self._estimate_train_connection(origin_data, dest_data)
-        
-        try:
-            # Chiamata API reale
-            soluzioni = self.api_treni.getIndicazioniViaggio(
-                origin_station_code,
-                dest_station_code,
-                date
-            )
+        # USA API REALE solo se richiesto esplicitamente
+        if use_real_api:
+            try:
+                train_info = self.train_pathfinder.find_train_route(
+                    origin_city,
+                    dest_city,
+                    date
+                )
+                
+                if train_info:
+                    self.train_cache[cache_key] = train_info
+                    return train_info
             
-            if soluzioni and len(soluzioni) > 0:
-                # Prendi soluzione migliore (min durata)
-                best = min(soluzioni, key=lambda s: self._parse_duration(s.get('durata', '99:99')))
-                
-                train_info = {
-                    'train': best,
-                    'travel_time': self._parse_duration(best.get('durata', '3:00')),
-                    'departure': best.get('orarioPartenza', '09:00'),
-                    'arrival': best.get('orarioArrivo', '12:00'),
-                    'price': best.get('prezzo_stimato', {}).get('seconda_classe', 30.0),
-                    'changes': best.get('cambi', 0),
-                    'numero_treno': best.get('soluzione', [{}])[0].get('numeroTreno', 'N/A') if best.get('soluzione') else 'N/A'
-                }
-                
-                # Cache
-                self.train_cache[cache_key] = train_info
-                return train_info
+            except Exception as e:
+                print(f"    ⚠️ Pathfinder error {origin_city}->{dest_city}: {e}")
         
-        except Exception as e:
-            print(f"    ⚠️  API error {origin_city}->{dest_city}: {e}")
-        
-        # Fallback
+        # Fallback geometrico (sempre, a meno che API non abbia avuto successo)
         return self._estimate_train_connection(origin_data, dest_data)
     
     def _estimate_train_connection(
@@ -1404,6 +1396,60 @@ class DPItineraryPlanner:
         train_cost = morning_train.get('price', 0) if morning_train else 0
         
         return attr_cost + train_cost
+    
+    def _enrich_schedule_with_real_trains(
+        self,
+        schedule: List[DaySchedule],
+        start_date: datetime
+    ) -> None:
+        """
+        Step 6: Arricchisce lo schedule con dati treni reali
+        
+        Strategia:
+        - Durante DP abbiamo usato fallback geometrico (veloce)
+        - Ora per il percorso finale usiamo API reale (accurato)
+        - Solo ~2-5 chiamate API invece di centinaia
+        """
+        for day in schedule:
+            # Solo per giorni con treno
+            if not day.morning_train or not day.from_city:
+                continue
+            
+            origin = day.from_city
+            dest = day.city
+            
+            # Se già ha dati reali, salta
+            if day.morning_train.get('real_data'):
+                print(f"  ✓ Day {day.day_number}: {origin}→{dest} già con dati reali")
+                continue
+            
+            print(f"  🔍 Day {day.day_number}: Cerco treno reale {origin}→{dest}")
+            
+            # Calcola datetime per questo giorno
+            search_hour = 9 if day.day_number == 1 else 13
+            current_datetime = start_date + timedelta(days=day.day_number - 1)
+            current_datetime = current_datetime.replace(hour=search_hour, minute=0)
+            
+            # USA API REALE
+            try:
+                real_train = self._find_best_train(
+                    origin,
+                    dest,
+                    current_datetime,
+                    use_real_api=True  # Questa volta USA API reale!
+                )
+                
+                if real_train and real_train.get('real_data'):
+                    # Sostituisci con dati reali
+                    day.morning_train = real_train
+                    day.travel_time = real_train['travel_time']
+                    print(f"    ✅ Trovato: {real_train['train_number']} ({real_train['train_type']}), "
+                          f"{real_train['departure']} → {real_train['arrival']} ({real_train['travel_time']:.1f}h)")
+                else:
+                    print(f"    ⚠️ Nessun treno reale trovato, mantengo stima geometrica")
+            
+            except Exception as e:
+                print(f"    ❌ Errore API: {e}, mantengo stima geometrica")
 
 
 def demo_dp_planner():

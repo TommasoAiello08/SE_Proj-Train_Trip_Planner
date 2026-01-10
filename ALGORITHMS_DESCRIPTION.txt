@@ -1,0 +1,155 @@
+ALGORITHMS USED IN THE ITALIAN TRAIN TRIP PLANNER
+===================================================
+
+Our Italian Train Trip Planner employs multiple algorithms working together to solve 
+the multi-day itinerary optimization problem:
+
+1. DYNAMIC PROGRAMMING (DP) FOR ROUTE OPTIMIZATION
+---------------------------------------------------
+The core routing algorithm uses DP to find the optimal sequence of cities over N days.
+
+Problem formulation:
+- State: dp[day][city] = maximum score achievable by reaching 'city' on given 'day'
+- Objective: Maximize total trip score while respecting constraints
+- Time complexity: O(days × cities² × connections)
+
+Transitions:
+- STAY: Remain in same city (if consecutive_days[city] < 2)
+  Score: dp[d][A] + city_score(A) * 0.7 + 30
+  
+- MOVE: Travel to different city B
+  Score: dp[d][A] + city_score(B) + 50 - travel_time * 5
+  Constraints: travel_time + min_stay ≤ 13h, travel_time ≤ 12h
+
+Backtracking: After computing all states, we reconstruct the optimal route by following 
+the prev[day][city] pointers from the destination backwards to the start.
+
+
+2. HAVERSINE DISTANCE FORMULA
+------------------------------
+Used throughout for geographic distance calculations between cities using 
+latitude/longitude coordinates.
+
+Formula: 
+  a = sin²(Δlat/2) + cos(lat1) × cos(lat2) × sin²(Δlon/2)
+  c = 2 × asin(√a)
+  distance = 6371 × c  (in kilometers)
+
+Applications:
+- Candidate city scoring (route proximity bonus)
+- Fallback train time estimation (~100 km/h)
+- Neighbor selection for train matrix building
+
+
+3. ROUTE-BASED CANDIDATE SELECTION WITH DETOUR PENALTY
+-------------------------------------------------------
+Before DP runs, we filter 106 Italian cities down to ~25-35 candidates to reduce 
+computation.
+
+Scoring function:
+  detour = (dist_start_to_city + dist_city_to_end) - dist_start_to_end
+  route_bonus = max(0, 200 - detour/10)
+  final_score = attraction_score + interest_match + route_bonus
+
+Result: Cities along the geographic path (Trieste→Bologna→Rome→Naples→Siracusa) 
+get higher bonuses than those requiring detours (Milan, Venice off to the side).
+
+
+4. GREEDY NEIGHBOR SELECTION ALGORITHM
+---------------------------------------
+For each origin city in the train matrix, we select only the K=8 most relevant 
+destinations (instead of all candidates).
+
+Selection criteria:
+1. Force-include destination city (critical fix for reachability)
+2. Calculate composite score = proximity_score + attraction_score
+   - proximity_score = max(0, 500 - distance_km)
+   - attraction_score = num_attractions × 2
+3. Sort by score descending
+4. Take top K neighbors
+
+This reduces API calls from 36² = 1296 to 36 × 8 = 288 per day.
+
+
+5. KNAPSACK-STYLE POI SELECTION
+--------------------------------
+For each day, select optimal attractions given time constraints (running clock 
+from 8:00-21:00).
+
+Greedy approximation:
+1. Score each POI: interest_match × 10 + rating × 2 + popularity - cost × 0.1
+2. Sort by score descending
+3. Greedily add POIs while current_clock + 3h ≤ 21:00 (max 3 POIs/day)
+
+Constraint: Each POI takes 3 hours fixed duration + travel time.
+
+
+6. CATEGORY DIVERSITY ALGORITHM FOR POI CURATION
+-------------------------------------------------
+When loading OSM data, we ensure balanced attraction types per city (20 POIs total).
+
+Two-phase selection:
+- Phase 1: Ensure minimum 2 POIs per target category (natura, cultura, arte, 
+  storia, etc.)
+  * Take 1 top-rated + 1 mid-range per category for rating diversity
+  
+- Phase 2: Fill remaining slots with 60% top-rated + 40% mid-range
+
+Result: Avoids cities with "20 churches" or "all 10-rated museums" - creates 
+realistic variety.
+
+
+7. CACHING WITH TIME-TO-LIVE (TTL)
+-----------------------------------
+Both train connections and OSM POIs use LRU-style caching:
+
+Cache key: (origin_city, dest_city, date) for trains, city_name for OSM
+TTL: 7 days for OSM data
+Invalidation: Age-based check before retrieval
+
+
+8. FALLBACK LINEAR INTERPOLATION
+---------------------------------
+When API calls fail or DP cannot find a route, we use geometric interpolation:
+
+Smart fallback algorithm:
+1. Find cities along straight line from start→end
+2. Calculate alignment = cos(angle_to_path)
+3. Select cities with highest alignment
+4. Distribute evenly across available days
+5. Estimate train times: distance/100 + 0.5h buffer
+
+
+9. RATE LIMITING WITH EXPONENTIAL BACKOFF
+------------------------------------------
+For OSM Overpass API (unreliable):
+
+  for attempt in range(max_retries):
+      if response.status_code == 429:
+          wait_time = (attempt + 1) × 5  # 5s, 10s, 15s...
+          sleep(wait_time)
+
+
+10. RUNNING CLOCK CONSTRAINT PROPAGATION
+-----------------------------------------
+Each day tracks cumulative time usage:
+
+  morning_clock = 8:00
+  + train_travel_time (with 1h buffer)
+  + POI_1 (3h) + POI_2 (3h) + POI_3 (3h)
+  = final_clock ≤ 21:00
+
+POIs are added greedily until clock limit reached. This naturally creates realistic 
+schedules without hard-coding specific rules.
+
+
+SUMMARY
+-------
+The system combines Dynamic Programming for global optimization with greedy heuristics 
+for subproblems (POI selection, neighbor selection), geometric algorithms for 
+distance/route calculations, and intelligent caching/fallback strategies for API 
+resilience. 
+
+The result is a practical multi-objective optimization that balances computational 
+efficiency (~20-30s response time) with solution quality, generating diverse and 
+realistic multi-day train itineraries across Italy.

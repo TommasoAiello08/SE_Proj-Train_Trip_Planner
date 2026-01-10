@@ -1,84 +1,71 @@
-# 🚂 Italian Train Trip Planner
+# Italian Train Trip Planner
 
-Intelligent train travel planning system for Italy with **Dynamic Programming optimization**, Trenitalia API integration, OpenStreetMap POI curation, and real-time weather data.
+Multi-day train travel planner for Italy using Dynamic Programming optimization, Trenitalia API integration, and OpenStreetMap POI curation.
 
 ![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)
 ![Cities](https://img.shields.io/badge/cities-106-green.svg)
 ![POIs](https://img.shields.io/badge/POIs-2000+-orange.svg)
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Status](https://img.shields.io/badge/status-beta-yellow.svg)
 
-## ✨ Features
+## Features
 
-- **🗺️ Interactive Map**: Visual selection of **106 Italian provinces** with real-time train connections
-- **🧠 Smart AI Planning with Dynamic Programming**: 
-  - Multi-day route optimization with train schedule integration
-  - **MAX 2 days per city** constraint for diverse itineraries
+- **Interactive Map**: Visual selection of 106 Italian provinces with train connections
+- **Dynamic Programming Route Optimization**: 
+  - Multi-day itinerary optimization balancing exploration, comfort, and travel time
   - Automatic intermediate city selection for long-distance trips
-  - Score-based city ranking considering interests, attractions, and travel efficiency
-- **🎯 Dual Planning Modes**:
-  - **Smart Open**: System suggests best destinations from starting city
-  - **Smart Fixed**: Optimal route planning between departure and arrival cities with intelligent waypoints
-- **📍 Curated POIs**: 
-  - **20 attractions per city** carefully selected from 28+ OpenStreetMap categories
-  - Category diversity: natura, cultura, arte, cibo, mare, montagna, storia, sport
-  - Rating balance: mix of top-rated (10/9) and hidden gems (8/7)
-- **🚆 Real Train Integration**: 
+  - MAX 2 consecutive days per city for diverse itineraries
+  - Score-based city ranking considering user interests, attractions, and geographic alignment
+- **Dual Planning Modes**:
+  - Smart Open: System suggests destinations from starting city
+  - Smart Fixed: Optimal route planning between departure and arrival with intelligent waypoints
+- **Curated POIs**: 
+  - 20 attractions per city from OpenStreetMap (2120 total POIs)
+  - Category diversity algorithm ensures variety (natura, cultura, arte, storia, etc.)
+  - Note: OSM data shows limited rating variance (mean 7.58, 99% clustered at 7-8)
+- **Train Integration**: 
   - Trenitalia API with time-aware search (9:00 day 1, 13:00+ subsequent days)
   - Running clock system (8:00-21:00) for realistic daily schedules
-  - Travel time + minimum stay constraints
-- **🌤️ Weather Integration**: 5-day forecasts to optimize outdoor activities
-- **💰 Smart Cost Estimation**: Day-by-day budget with trains, attractions, and meals
-- **⚡ Performance Optimized**: 
-  - OSM cache system for instant POI loading
-  - Optimized DP parameters (35 candidates, 8 connections per city)
-  - Realistic computation time estimation (~22-24s for 5-day trips)
+  - Aggressive caching to maintain ~20-30s response times
+- **Cost Estimation**: Day-by-day budget including trains, attractions, and meals
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 SEProejct/
 ├── frontend/
 │   ├── backend_server.py       # Flask API server (port 5001)
-│   └── map_planner.html        # Interactive web interface with route visualization
+│   └── map_planner.html        # Interactive web interface
 ├── src/
-│   ├── dp_itinerary_planner.py # ⭐ NEW: Dynamic Programming route optimizer
-│   ├── itinerary_planner.py    # Legacy greedy planner
+│   ├── dp_itinerary_planner.py # Dynamic Programming route optimizer
 │   ├── city_database.py        # 106 cities with OSM on-demand loading
-│   ├── travel_graph.py         # Train connection graph
-│   ├── osm_provider.py         # OpenStreetMap POI curation (20/city)
-│   ├── weather_provider.py     # Weather API integration
+│   ├── osm_provider.py         # OpenStreetMap POI curation
+│   ├── weather_provider.py     # Weather API (prepared, not actively used)
 │   └── apitr.py                # Trenitalia API wrapper
 ├── cache/
 │   └── osm/                    # 106 city POI caches (20 curated each)
-├── data/
-│   ├── cities_database.json    # 106 Italian provinces metadata
-│   └── provinces_static.json   # Fallback static data
-└── scripts/
-    ├── pull_all_osm_data.py    # Complete OSM cache refresh
-    └── build_complete_database.py  # Database builder
+└── data/
+    ├── cities_database.json    # 106 Italian provinces metadata
+    └── provinces_static.json   # Fallback static data
 ```
 
-### 🧮 Dynamic Programming Algorithm
+### Algorithm Overview
 
-The DP optimizer (`dp_itinerary_planner.py`) features:
+The system uses four main algorithmic stages:
 
-- **State**: `dp[day][city]` = maximum score reaching city on given day
-- **Transitions**: STAY (same city) vs MOVE (different city with train)
-- **Constraints**:
-  - `MAX_DAYS_PER_CITY = 2`: Forces diverse itineraries
-  - `MIN_STAY_HOURS = 4`: Minimum stay after travel
-  - `MAX_TRAIN_HOURS = 8`: Daily travel limit
-- **Scoring**:
-  - City attractions + interest match
-  - Route-based candidate selection (favors cities along path)
-  - Exploration bonus (50pts) vs Stay bonus (30pts)
-  - Travel penalty (time × 5)
-- **Features**:
-  - Consecutive day tracking to enforce city limits
-  - Knapsack POI selection with running clock (8:00-21:00)
-  - Day-by-day schedule generation without duplicates
+1. **Route-Based Candidate Selection**: Filters 106 cities to ~25-35 candidates using detour penalty formula favoring cities along the direct path
+2. **Greedy Neighbor Selection**: Each city connects to 8 nearest neighbors (always including destination), reducing API calls from O(n²) to manageable levels
+3. **Dynamic Programming Optimization**: Computes optimal city sequence by evaluating STAY (comfort bonus) vs MOVE (exploration bonus minus travel cost) transitions, with daily constraints ensuring realistic schedules
+4. **Greedy Knapsack POI Selection**: Selects 2-3 attractions per day based on interest matching and ratings, respecting running clock constraint (8:00-21:00)
 
-## 🚀 Installation and Setup
+**Key Parameters:**
+- MAX_DAYS_PER_CITY = 2 (forces diverse itineraries)
+- MIN_STAY_HOURS = 2 (minimum exploration time)
+- MAX_TRAIN_HOURS_PER_DAY = 12
+- Exploration bonus: +50 points
+- Stay bonus: +30 points
+- Travel penalty: -5 per hour
+
+## Installation and Setup
 
 ### 1. Clone and Setup
 
@@ -89,7 +76,7 @@ python3 -m venv .venv
 pip install -r requirements.txt
 ```
 
-### 2. Start System (Automatic) ⚡
+### 2. Start System
 
 ```bash
 source .venv/bin/activate  # macOS/Linux
@@ -97,21 +84,11 @@ source .venv/bin/activate  # macOS/Linux
 ./start.sh
 ```
 
-The `start.sh` script automatically:
-- 🔄 Terminates previous processes on ports 5001 and 8080
-- 🚀 Starts Flask backend (port 5001)
-- 🌐 Starts frontend HTTP server (port 8080)
-- 🔗 Automatically opens browser at **http://localhost:8080/map_planner.html**
-- 📝 Logs available in `/tmp/backend.log` and `/tmp/frontend.log`
+The script automatically starts Flask backend (port 5001) and frontend HTTP server (port 8080), then opens browser at http://localhost:8080/map_planner.html
 
-**To stop the servers:**
-```bash
-./stop.sh
-```
+**To stop:** `./stop.sh`
 
 ### 3. Manual Start (Optional)
-
-If you prefer to start manually (2 terminals):
 
 **Terminal 1 - Backend:**
 ```bash
@@ -125,45 +102,55 @@ cd frontend
 python3 -m http.server 8080
 ```
 
-Open in browser: **http://localhost:8080/map_planner.html**
+## Usage
 
-## 🎮 How to Use
+### "Departure Only" Mode
+1. Click "Departure Only" (default)
+2. Select city on map (green marker)
+3. Choose date, duration (1-7 days), and interests
+4. Click "Plan Trip"
 
-### "Departure Only" Mode 🧠
-1. Click **"🧠 Departure Only"** (default mode)
-2. Click a city on the map (turns **green**)
-3. Select departure date and duration (1-5 days)
-4. Choose interests (optional): art, history, nature, food, sea, mountain
-5. Click **"🔍 Plan Trip"**
-6. View detailed itinerary below the map
+### "Departure + Arrival" Mode
+1. Click "Departure + Arrival"
+2. Select departure (green) and arrival (red) cities
+3. Set parameters and plan trip
+4. System uses DP to find optimal route with intermediate stops
 
-### "Departure + Arrival" Mode 🎯
-1. Click **"🎯 Departure + Arrival"**
-2. Click departure city (**green**) then arrival city (**red**)
-3. Set parameters and click **"🔍 Plan Trip"**
-4. System uses **Dynamic Programming** to find optimal route with intermediate stops
-5. **Example**: Trieste → Palermo (5 days) generates route like:
-   - Day 1-2: Trieste (2 days, 20 POIs)
-   - Day 3-4: Bologna or Rome (2 days, 20 POIs)  
-   - Day 5: Palermo (1 day, 20 POIs)
+Example: Trieste → Palermo (5 days) generates diverse route visiting 5 unique cities
 
-### Itinerary Result
+### Result Display
 
-The itinerary shows for each day:
-- 🏙️ **City and date**
-- 🚂 **Train journey** (departure time, duration, arrival)
-- 🎯 **Daily activities** with:
-  - Attraction name, type, and category
-  - ⏱️ Visit duration (3h per POI)
-  - 💰 Entrance cost
-  - ⭐ Quality rating (7-10)
-  - 🕐 Start time in running clock (8:00-21:00)
-- 📊 **Daily summary**: total POIs, available hours, and daily cost
-- 🗺️ **Route visualization**: Red dotted line connecting cities on map
+Each day shows:
+- City and date
+- Train details (departure, duration, arrival)
+- Activities with timing, costs, and ratings
+- Daily summary with total cost
+- Route visualization on map
 
-## 🔧 Troubleshooting
+## Known Issues and Limitations
 
-### ❌ Error: "Failed to fetch" or CORS errors
+**Beta Status**: This project is in beta. Production deployment would require:
+- Higher quality data sources (current OSM data: mean rating 7.58, variance 0.26, 99% clustered at 7-8)
+- More rigorous algorithm validation and parameter tuning
+- Architectural redesign for scalability
+
+**Computation Speed**: Response times ~20-30 seconds achieved through aggressive caching. Initial implementation with real-time API queries took several minutes.
+
+**DP Convergence**: Algorithm required careful parameter tuning:
+- Too high exploration bonus → zig-zag routes
+- Too low exploration bonus → staying in one city
+- Final parameters: exploration +50, stay +30, travel -5×hours
+
+**Scalability**: Not designed for multi-country expansion:
+- Would require integrating multiple national APIs
+- Exponentially larger datasets
+- Computation times exceeding acceptable web thresholds
+
+**Data Quality**: OSM data limitations affect attraction differentiation between cities
+
+## Troubleshooting
+
+### Error: "Failed to fetch" or CORS errors
 
 **Quick Solution:**
 ```bash
@@ -173,79 +160,31 @@ The itinerary shows for each day:
 **Cause**: Frontend not served via HTTP or backend stopped
 
 **Manual Solution**:
-1. Verify **both servers** are running:
-   - **Backend**: port 5001
-   - **Frontend**: port 8080
-2. Access: **http://localhost:8080/map_planner.html** (not file://)
-3. Check logs: `/tmp/backend.log` and `/tmp/frontend.log`
-4. Reload browser page (F5)
+1. Verify both servers running (ports 5001 and 8080)
+2. Access: http://localhost:8080/map_planner.html (not file://)
+3. Check logs: /tmp/backend.log and /tmp/frontend.log
 
-**⚠️ Important**: DO NOT open the HTML file directly with double-click. Always use `./start.sh` to start the system.
+**Important**: DO NOT open HTML file directly. Always use ./start.sh
 
-### If port 5001 or 8080 is busy
+### Port conflicts
 
 ```bash
-./stop.sh  # Automatically terminates processes on ports 5001 and 8080
-./start.sh # Restart system
+./stop.sh  # Terminates processes on ports 5001 and 8080
+./start.sh
 ```
 
-**Manual check:**
+### Map doesn't load cities
+
+1. Check backend logs: must show "Database loaded: 106 cities"
+2. Check browser console (F12) for errors
+3. Test endpoint: `curl http://localhost:5001/api/cities`
+
+## Useful Scripts
+
+## Useful Scripts
+
+### Start/Stop
 ```bash
-lsof -i :5001  # Backend
-lsof -i :8080  # Frontend
-```
-
-### Map doesn't load 106 cities
-
-1. Check backend logs: must show `✅ Database loaded: 106 cities`
-2. Check browser console (F12) for API errors
-3. Manual endpoint test: `curl http://localhost:5001/api/cities`
-4. If you see fewer than 106 cities, regenerate database:
-   ```bash
-   python scripts/build_complete_database.py
-   ```
-
-### Dependency errors
-
-```bash
-source .venv/bin/activate
-pip install --upgrade flask flask-cors requests
-```
-
-## 📁 Struttura Progetto
-
-```
-SEProejct/
-├── frontend/
-│   ├── backend_server.py       # Flask API (porta 5001)
-│   ├── map_planner.html        # Single-page interface
-│   ├── MODES_GUIDE.md          # Guida modalità
-│   └── USER_GUIDE.md           # Guida utente
-├── src/
-│   ├── itinerary_planner.py    # Core planning logic
-│   ├── city_database.py        # Database manager (106 cities)
-│   ├── travel_graph.py         # Dijkstra routing
-│   ├── weather_provider.py     # Weather API
-│   ├── osm_provider.py         # OpenStreetMap integration
-│   └── trenitalia_provider.py  # Trenitalia API
-├── data/
-│   ├── cities_database.json    # 106 provinces + 3000+ POIs
-│   ├── provinces_static.json   # Fallback database (20 cities)
-│   └── cache/                  # OSM/Weather response cache
-├── scripts/
-│   └── build_complete_database.py  # OSM downloader (107 provinces)
-└── docs/
-    ├── README.md               # Questo file
-    ├── ANALISI_API_E_ARCHITETTURA.md
-    ├── RIEPILOGO_PROGETTO.md
-    └── SINTESI_ANALISI.md
-```
-
-## 🛠️ Useful Scripts
-
-### Start/Stop System
-```bash
-source .venv/bin/activate
 ./start.sh  # Start backend + frontend + open browser
 ./stop.sh   # Stop all servers
 ```
@@ -253,72 +192,36 @@ source .venv/bin/activate
 ### Regenerate OSM Cache
 ```bash
 python scripts/pull_all_osm_data.py
-# Downloads fresh POI data for all 106 cities
-# Each city: 20 curated POIs from 28+ categories
-# Time: ~8-10 minutes with adaptive radius (15km → 25km → 35km)
-# Output: cache/osm/*.json
+# Downloads POI data for all 106 cities
+# Time: ~8-10 minutes
 ```
 
 ### Verify Cache
 ```bash
 ls cache/osm/*.json | wc -l  # Should show 106
-cat cache/osm/roma.json | python -m json.tool | grep '"name"' | head -20
 ```
 
-### Verify System Health
+### Health Check
 ```bash
 curl http://localhost:5001/api/health
 # Output: {"message":"OK","status":"healthy"}
-
-curl http://localhost:5001/api/cities | python -m json.tool | head -20
-# Verify loaded cities
 ```
 
-## 👥 Contributors
+## Contributors
 
-- **Tommaso Aiello**: Core development, DP optimization, OSM integration, POI curation
-- **Alessandro**: Bug fixes, validation, and testing (branch fix/ale)
+- **Tommaso Aiello**: Core development, DP optimization, OSM integration
+- **Alessandro**: Bug fixes and validation
 
-## 🎓 Project Info
+## Project Info
 
-Developed for **Software Engineering** course at Università degli Studi di Milano.
+Developed for Software Engineering course at Università degli Studi di Milano (2025/2026)
 
-**Academic Year**: 2025/2026
+## License
 
-## 📄 License
-
-MIT License - see LICENSE file for details
+MIT License
 
 ---
 
-**🚀 Quick Start**: 
-```bash
-source .venv/bin/activate && ./start.sh
-```
+**Quick Start**: `source .venv/bin/activate && ./start.sh`
 
-**🐛 Troubleshooting**: If routes show empty days, restart system: `./stop.sh && ./start.sh`
-
-**📈 Performance**: 5-day trip computation ~22-24 seconds with OSM cache
-
-## 🆕 Recent Updates (January 2026)
-
-### v2.0 - Dynamic Programming Revolution
-- ✅ Complete DP-based route optimizer with multi-day support
-- ✅ MAX_DAYS_PER_CITY constraint (max 2 days per location)
-- ✅ OSM POI curation: 20 diverse attractions per city
-- ✅ Running clock system (8:00-21:00) for realistic schedules
-- ✅ Time-aware train search (9:00 day 1, 13:00+ subsequent days)
-- ✅ Route visualization with red dotted lines on map
-- ✅ Performance optimization (35 candidates, 8 connections)
-- ✅ Category diversity: 8 categories with min 2 POIs each
-- ✅ Rating balance: mix of 10/9 (top) and 8/7 (hidden gems)
-- ✅ On-demand OSM enrichment for cities with missing POIs
-
-### Known Limitations
-- Long-distance routes (>1000 km) may take 30-40 seconds
-- OSM cache recommended for all 106 cities (use `pull_all_osm_data.py`)
-- Maximum trip duration: 30 days
-
----
-
-**Happy travels! 🚂🇮🇹**
+**Performance**: 5-day trip ~20-30 seconds with OSM cache
